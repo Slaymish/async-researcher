@@ -929,6 +929,8 @@ class ResearcherView extends ItemView {
   private filterText = "";
   private filterTag: string | null = null;
   private collapsedGroups = new Set<ResearchStatus>();
+  private bodyEl: HTMLElement | null = null;
+  private cachedItems: ResearchItem[] = [];
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -968,16 +970,7 @@ class ResearcherView extends ItemView {
     }
     const allTags = [...allTagsSet].sort();
 
-    // Apply filters
-    let visibleItems = allItems;
-    if (this.filterText.trim()) {
-      const query = this.filterText.toLowerCase();
-      visibleItems = visibleItems.filter((item) => item.title.toLowerCase().includes(query));
-    }
-    if (this.filterTag) {
-      const tag = this.filterTag;
-      visibleItems = visibleItems.filter((item) => item.tags.includes(tag));
-    }
+    this.cachedItems = allItems;
 
     const { contentEl } = this;
     contentEl.empty();
@@ -1001,7 +994,7 @@ class ResearcherView extends ItemView {
     searchInput.value = this.filterText;
     searchInput.addEventListener("input", () => {
       this.filterText = searchInput.value;
-      void this.render();
+      this.renderBody();
     });
 
     if (allTags.length > 0) {
@@ -1019,7 +1012,24 @@ class ResearcherView extends ItemView {
       }
     }
 
-    const bodyEl = contentEl.createDiv({ cls: "researcher-view__content" });
+    this.bodyEl = contentEl.createDiv({ cls: "researcher-view__content" });
+    this.renderBody();
+  }
+
+  private renderBody() {
+    const bodyEl = this.bodyEl;
+    if (!bodyEl) return;
+    bodyEl.empty();
+
+    let visibleItems = this.cachedItems;
+    if (this.filterText.trim()) {
+      const query = this.filterText.toLowerCase();
+      visibleItems = visibleItems.filter((item) => item.title.toLowerCase().includes(query));
+    }
+    if (this.filterTag) {
+      const tag = this.filterTag;
+      visibleItems = visibleItems.filter((item) => item.tags.includes(tag));
+    }
 
     for (const status of STATUS_ORDER) {
       const groupItems = visibleItems.filter((item) => item.status === status);
@@ -1070,7 +1080,7 @@ class ResearcherView extends ItemView {
         } else {
           this.collapsedGroups.add(status);
         }
-        void this.render();
+        this.renderBody();
       });
 
       if (isCollapsed) continue;
@@ -1083,7 +1093,10 @@ class ResearcherView extends ItemView {
       }
 
       for (const item of groupItems) {
-        const cardEl = groupEl.createEl("button", { cls: "researcher-card" });
+        const cardEl = groupEl.createEl("div", {
+          cls: "researcher-card",
+          attr: { role: "button", tabindex: "0" },
+        });
 
         if (DRAG_SOURCES.has(item.status)) {
           cardEl.draggable = true;
@@ -1212,6 +1225,14 @@ class ResearcherView extends ItemView {
         cardEl.addEventListener("click", () => {
           if (this.isDragging) return;
           void this.plugin.app.workspace.getLeaf(false).openFile(item.file);
+        });
+
+        cardEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (this.isDragging) return;
+            void this.plugin.app.workspace.getLeaf(false).openFile(item.file);
+          }
         });
       }
     }

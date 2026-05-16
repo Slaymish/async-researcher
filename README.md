@@ -4,6 +4,8 @@ You have a question worth digging into. Researcher runs a deep web search — no
 
 The sidebar gives you a lightweight queue for managing ideas from first capture through to a finished report, without leaving Obsidian.
 
+![Researcher sidebar](sidebar.png)
+
 ---
 
 ## What you get

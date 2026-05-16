@@ -25,29 +25,43 @@
 - [ ] Custom question templates (vault note that defines default clarifying questions)
 - [ ] Configurable note template for new research ideas
 - [ ] "Research brief" auto-generation command (summary of answered questions, inserted before run)
+- [ ] Due date field (`research-due: YYYY-MM-DD`) shown on cards and factored into sort order
+- [ ] Quick clipboard capture command — create a research idea pre-filled from clipboard without needing an open editor
 
 ## v0.7.0 — Notifications & run history
 - [ ] Desktop notification (with "Open report" action) when a run completes
 - [ ] Per-note run history panel (all past runs, not just the latest)
 - [ ] "Delete completed runs older than X days" cleanup command
 - [ ] "Open report" quick-action button on completed cards (no need to open note first)
+- [ ] Cancel a running research job from the sidebar (kills the sidecar process)
+- [ ] Word count shown on the "Report ready" chip for completed items
 
 ## v0.8.0 — Sidecar improvements
 - [ ] Expose sidecar search API (`RESEARCHER_SEARCH_API`) as a plugin setting
 - [ ] Per-run engine selection (stub vs. open_deep_research) from the start modal
+- [ ] Per-note LLM model override (`research-llm-model` frontmatter) — use a different model for a specific idea without changing global settings
 - [ ] Parse intermediate LangGraph output for real sub-step names in heartbeat
 - [ ] Python environment validation on plugin load (warn if sidecar deps missing)
+
+## v0.9.0 — Power-user UX
+- [ ] Keyboard navigation in sidebar — arrow keys move between cards, Enter opens, hotkeys for common actions (move forward, move back, start research)
+- [ ] Bulk selection (shift-click or checkbox) with bulk move and bulk delete
+- [ ] Additional sort modes — sort within a column by date added, last updated, or title (currently hardcoded to priority → alpha)
+- [ ] Full-text search — match against note body content, not just title
+- [ ] Drag to reorder cards within a column for custom ordering (persisted to `research-sort-order` frontmatter)
 
 ## v1.0.0 — Community release candidate
 - [ ] Split `main.ts` into separate source modules (view, modals, settings, stores)
 - [ ] Obsidian community plugin submission checklist (authorUrl, README, screenshots)
 - [ ] Inline settings validation warnings (missing model, sidecar not found, etc.)
 - [ ] Settings import/export (backup/restore configuration as JSON)
+- [ ] Staleness indicators — time-in-current-stage badge on cards (e.g., "in backlog 23 d") to surface stuck ideas
 - [ ] In-sidebar help panel explaining the workflow for new users
 
 ## v1.1.0 — Iterative research
 - [ ] Follow-up question generation after a report is completed
 - [ ] "Re-run with additional context" command (pre-seeds new run with prior report)
+- [ ] Snooze an idea — hide it from the sidebar until a future date (`research-snooze-until` frontmatter), with a "snoozed" count badge on the group header
 - [ ] Research threads — group related ideas by tag in the sidebar
 
 ## v1.2.0 — Export & sharing
@@ -66,3 +80,4 @@
 - [ ] Scheduled research ("run every Monday and append a new report")
 - [ ] Bidirectional web app + plugin sync
 - [ ] Vault-wide research graph (which notes appear across research runs)
+- [ ] Duplicate-detection — warn when a new idea is semantically similar to an existing one

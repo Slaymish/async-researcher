@@ -250,6 +250,11 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+.researcher-card:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
 .researcher-card[draggable="true"] {
   cursor: grab;
 }
