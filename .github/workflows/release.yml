@@ -24,7 +24,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 9
 
       - name: Build plugin
         run: |
@@ -55,7 +55,7 @@ jobs:
             ' CHANGELOG.md > "$notes_file"
           fi
           if [ ! -s "$notes_file" ]; then
-            printf "Release %s of the Synod Obsidian plugin.\n\nSee the [README](https://github.com/Slaymish/synod#readme) for setup and usage. Full commit history: https://github.com/Slaymish/synod/commits/%s\n" "$tag" "$tag" > "$notes_file"
+            printf "Release %s of the Researcher Obsidian plugin.\n\nSee the [README](https://github.com/Slaymish/async-researcher#readme) for setup and usage. Full commit history: https://github.com/Slaymish/async-researcher/commits/%s\n" "$tag" "$tag" > "$notes_file"
           fi
           gh release create "$tag" \
             --title="$tag" \
