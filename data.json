@@ -1,0 +1,14 @@
+{
+  "researchFolder": "Research Ideas",
+  "outputFolder": "Research Outputs",
+  "runsFolder": "Research Runs",
+  "sidecarCommand": "python3",
+  "sidecarScriptPath": "",
+  "llmProvider": "openrouter",
+  "llmBaseUrl": "",
+  "llmApiKey": "Other things I considered but decided against: - Concurrency setting for the LLM single-flight gate (current single-GPU default is fine) - Pruning old packets/reports (no user pain yet) - Streaming Ollama responses (complicates the semaphore) - A vector store (Architecture doc says explicitly \"not yet needed\")",
+  "llmModel": "",
+  "deepResearchRunner": "internal_stub",
+  "sidecarEngine": "stub",
+  "queueEnabled": false
+}

@@ -1,0 +1,25 @@
+{
+  "name": "researcher-obsidian-plugin",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Obsidian plugin for note-native research workflows.",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc --noEmit && node esbuild.config.mjs",
+    "dev": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "obsidian",
+    "research"
+  ],
+  "author": "Hamish",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.27.1",
+    "obsidian": "^1.9.14",
+    "typescript": "^5.9.3"
+  }
+}
