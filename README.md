@@ -1,79 +1,146 @@
-# Researcher Obsidian Plugin
+# Researcher
 
-Researcher turns markdown notes into a lightweight async research workflow. Notes are the source of truth; the sidebar is an index over notes with `research-*` frontmatter.
+Move research ideas through your vault without losing them.
 
-## Development
+Notes are the source of truth — the sidebar is just a view over `research-*` frontmatter. Nothing is stored outside your vault.
 
-```bash
-pnpm install
-pnpm run build
+---
+
+## The workflow
+
+Ideas move through five stages:
+
+```
+Backlog → To Refine → To Research → Researching → Completed
 ```
 
-## Manual installation
+**Backlog** — capture anything. A question, a topic, a passage you selected. Use the command palette or drag selected text straight into a note.
 
-Copy these files into a test vault at `.obsidian/plugins/researcher/`:
+**To Refine** — an LLM reads the note and suggests clarifying questions (what outcome would make this useful, what constraints apply, what you already know). Answer them in the note. Skip this step if the idea is already clear enough.
 
-- `manifest.json`
-- `main.js`
-- `styles.css`
-- `sidecar/deep_research_stub.py`
-- `sidecar/setup-open-deep-research.sh`
-- `sidecar/.env.example`
+**To Research** — ready to run. Start a deep research job from here.
 
-Enable the plugin in Obsidian community plugin settings.
+**Researching** — the sidecar runs in the background, searches the web, and writes a `report.md` into your vault. The sidebar card shows live progress.
 
-## V1 behavior
+**Completed** — report is in your vault, linked from the idea note.
 
-- Creates research idea notes in `Research Ideas` by default.
-- Captures selected editor text into a new research idea.
-- Tracks status in frontmatter.
-- Shows a sidebar grouped by research status.
-- Starts stub deep research runs from the active research note.
-- Shows latest run progress on sidebar cards.
-- Generates clarifying questions only when the command is explicitly run.
-- Uses Ollama or an OpenAI-compatible `/chat/completions` provider when a model is configured.
-- Falls back to deterministic placeholder questions when no model is configured.
+You can drag cards forward, right-click for any move (including backward), or use commands from the active note.
 
-## Deep research run contract
+---
 
-The command `Start deep research on active note` creates a folder under `Research Runs`:
+## What you need
 
-- `run.json` — full run request and current status
-- `status.json` — compact progress status for UI watching
-- `report.md` — final report output
+- Obsidian 1.5+ (desktop only — the sidecar is a subprocess)
+- An LLM for question generation: Ollama, OpenAI, Anthropic, OpenRouter, or any OpenAI-compatible endpoint
+- Python 3 + [open-deep-research](https://github.com/langchain-ai/open_deep_research) for the research step (optional — everything else works without it)
 
-The default runner is the internal stub. Switch **Deep research runner** to **Sidecar process** to spawn a Python sidecar. With an empty script path, the plugin uses:
+If you skip the LLM setup, question generation falls back to three generic placeholder questions you can fill in manually. If you skip the Python setup, you can still use the plugin for capture, organisation, and manual research.
 
-```text
-.obsidian/plugins/researcher/sidecar/deep_research_stub.py
-```
+---
 
-The bundled sidecar supports three engines:
+## Setup
 
-- `auto` — use Open Deep Research if importable, otherwise use the stub
-- `stub` — always use the deterministic contract-test runner
-- `open_deep_research` — require `langchain-ai/open_deep_research` to be importable
+**1. Install the plugin** via Obsidian community plugins, or manually (see below).
 
-For Open Deep Research, install its Python environment separately and point **Sidecar command** at that environment's Python executable. The sidecar invokes the compiled `open_deep_research.deep_researcher` LangGraph and writes `open-deep-research-result.json` alongside `report.md`.
+**2. Set your LLM** — Settings → Researcher → LLM provider. Pick a provider, paste an API key, set a model name. Ollama works out of the box if it's running locally.
 
-Quick setup from the installed plugin folder:
+**3. Set up deep research** (optional) — run the setup script from the plugin's sidecar folder:
 
 ```bash
 cd /path/to/vault/.obsidian/plugins/researcher/sidecar
 ./setup-open-deep-research.sh
 ```
 
-Useful environment variables for the sidecar:
+This creates a Python venv and installs `open-deep-research`. The script prints the exact path to set as **Python command** in settings.
 
-- `RESEARCHER_RESEARCH_MODEL`
-- `RESEARCHER_SUMMARIZATION_MODEL`
-- `RESEARCHER_COMPRESSION_MODEL`
-- `RESEARCHER_FINAL_REPORT_MODEL`
-- `RESEARCHER_SEARCH_API`
-- `RESEARCHER_MAX_ITERATIONS`
-- `RESEARCHER_MAX_TOOL_CALLS`
-- `RESEARCHER_MAX_CONCURRENCY`
+You'll also need API keys for a search backend (Tavily is the default) and for whichever model you're using for research. Set these in your shell environment before launching Obsidian — they're not stored in the vault.
 
-The sidecar does not write API keys into the vault. Configure provider keys in the Python environment.
+**4. Open the sidebar** — ribbon icon or **Open research sidebar** command.
 
-While Open Deep Research is running, the sidecar writes heartbeat progress to `run.json` and `status.json` so the Obsidian sidebar can keep showing that work is alive even during long graph execution.
+---
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| Create research idea | Opens a modal to name and describe a new idea |
+| Capture selection as research idea | Wraps selected text into a new idea note |
+| Make current note a research idea | Adds research frontmatter to an existing note |
+| Generate clarifying questions | Asks the LLM to suggest questions for the current note |
+| Start deep research on active note | Kicks off a research run |
+| Open research sidebar | Focuses the sidebar panel |
+
+---
+
+## LLM providers
+
+| Provider | Notes |
+|---|---|
+| Ollama | Local. Set base URL to your server (default: `http://localhost:11434`) |
+| OpenAI | API key from platform.openai.com |
+| Anthropic | API key from console.anthropic.com |
+| OpenRouter | API key from openrouter.ai |
+| OpenAI-compatible | Any endpoint that speaks `/chat/completions` |
+
+---
+
+## Deep research details
+
+Each run creates a folder under `Research Runs/`:
+
+```
+Research Runs/
+  my-idea-2025-01-17/
+    run.json      ← full run record and live progress
+    status.json   ← compact status polled by the sidebar
+    report.md     ← the output
+```
+
+The sidecar supports three engines, set via **Sidecar engine** in settings or the `RESEARCHER_SIDECAR_ENGINE` env var:
+
+- `auto` — uses open-deep-research if importable, otherwise falls back to the stub
+- `open_deep_research` — requires the installed venv
+- `stub` — deterministic, no web access (useful for testing the workflow without API credits)
+
+**Optional env vars** (override what's set in plugin settings):
+
+```bash
+RESEARCHER_RESEARCH_MODEL        # e.g. openai:gpt-4.1
+RESEARCHER_SUMMARIZATION_MODEL
+RESEARCHER_COMPRESSION_MODEL
+RESEARCHER_FINAL_REPORT_MODEL
+RESEARCHER_SEARCH_API            # tavily, duckduckgo, etc.
+RESEARCHER_MAX_ITERATIONS        # default 4
+RESEARCHER_MAX_TOOL_CALLS        # default 8
+RESEARCHER_MAX_CONCURRENCY       # default 4
+```
+
+API keys (`OPENAI_API_KEY`, `TAVILY_API_KEY`, etc.) are read from your shell environment. They are not written into the vault.
+
+---
+
+## Manual installation
+
+Copy into `.obsidian/plugins/researcher/`:
+
+```
+manifest.json
+main.js
+styles.css
+sidecar/deep_research.py
+sidecar/setup-open-deep-research.sh
+sidecar/.env.example
+```
+
+Enable in Settings → Community plugins.
+
+---
+
+## Development
+
+```bash
+pnpm install
+pnpm build    # type-check + bundle → main.js
+pnpm dev      # watch mode
+pnpm typecheck
+```
