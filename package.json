@@ -15,6 +15,9 @@
   ],
   "author": "Hamish",
   "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "devDependencies": {
     "@types/node": "^20.19.25",
     "builtin-modules": "^5.0.0",
