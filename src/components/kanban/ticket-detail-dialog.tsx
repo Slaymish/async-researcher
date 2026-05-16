@@ -60,6 +60,8 @@ export function TicketDetailDialog({
     return answers[questionId] ?? stored;
   }
 
+  const canMoveToRefine = ticket.columnId === 'backlog';
+
   const canMoveToResearch =
     ticket.columnId === 'to-refine' &&
     ticket.questions.length > 0 &&
@@ -133,6 +135,11 @@ export function TicketDetailDialog({
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+            {canMoveToRefine && (
+              <Button size="sm" onClick={() => { onMove(ticket.id, 'to-refine'); onClose(); }}>
+                Move to refine →
+              </Button>
+            )}
             {canMoveToResearch && (
               <Button size="sm" onClick={() => { onMove(ticket.id, 'to-research'); onClose(); }}>
                 Ready to research →
