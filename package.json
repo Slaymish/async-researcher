@@ -20,7 +20,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.25",
-    "builtin-modules": "^5.0.0",
     "esbuild": "^0.27.1",
     "obsidian": "^1.9.14",
     "typescript": "^5.9.3"
