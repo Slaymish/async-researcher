@@ -50,6 +50,75 @@
   padding-right: 2px; /* room for outline without clipping */
 }
 
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+
+.researcher-view__filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+  flex-shrink: 0;
+}
+
+.researcher-view__search {
+  width: 100%;
+  padding: var(--size-2-2) var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-sizing: border-box;
+}
+
+.researcher-view__search:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.researcher-view__search::placeholder {
+  color: var(--text-faint);
+}
+
+.researcher-view__tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-1);
+  padding: 2px 0;
+}
+
+.researcher-view__tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.researcher-view__tag-chip:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.researcher-view__tag-chip--active {
+  background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+  font-weight: var(--font-medium);
+}
+
+.researcher-view__tag-chip--active:hover {
+  background: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+}
+
 /* ── Groups ──────────────────────────────────────────────────────────────── */
 
 .researcher-view__group {
@@ -66,13 +135,40 @@
 .researcher-view__group-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--size-2-1);
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0 2px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.researcher-view__group-header > span:first-child {
+  flex: 1;
+}
+
+.researcher-view__group-header:hover .researcher-view__group-count {
+  background: var(--background-modifier-border-hover);
+}
+
+.researcher-view__group-chevron {
+  font-size: 10px;
+  opacity: 0.6;
+  transition: transform 150ms ease;
+  display: inline-block;
+  line-height: 1;
+}
+
+.researcher-view__group-chevron::before {
+  content: "▾";
+}
+
+.researcher-view__group-chevron--collapsed::before {
+  content: "▸";
 }
 
 .researcher-view__group-count {
@@ -175,10 +271,39 @@
   border-style: dashed;
 }
 
+.researcher-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2-1);
+}
+
 .researcher-card__title {
+  flex: 1;
   font-size: var(--font-ui-small);
   font-weight: var(--font-medium);
   line-height: 1.4;
+}
+
+.researcher-card__priority {
+  flex-shrink: 0;
+  font-size: 9px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.6;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 1px;
+}
+
+.researcher-card__priority--high {
+  background: color-mix(in srgb, var(--color-red) 15%, transparent);
+  color: var(--color-red);
+}
+
+.researcher-card__priority--low {
+  background: color-mix(in srgb, var(--text-faint) 20%, transparent);
+  color: var(--text-faint);
 }
 
 .researcher-card__meta {
@@ -296,6 +421,26 @@
 @keyframes researcher-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+/* ── Ribbon badge ─────────────────────────────────────────────────────────── */
+
+.researcher-ribbon-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  padding: 0 3px;
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
 /* ── Modals ───────────────────────────────────────────────────────────────── */

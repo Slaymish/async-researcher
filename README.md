@@ -1,8 +1,16 @@
 # Researcher
 
-Move research ideas through your vault without losing them.
+You have a question worth digging into. Researcher runs a deep web search — not an LLM answering from memory, but actual searches across hundreds of live sources — and writes the results into your vault as a cited report.
 
-Notes are the source of truth — the sidebar is just a view over `research-*` frontmatter. Nothing is stored outside your vault.
+The sidebar gives you a lightweight queue for managing ideas from first capture through to a finished report, without leaving Obsidian.
+
+---
+
+## What you get
+
+When a research run finishes, a `report.md` lands in your vault. It covers the topic from multiple angles, cites its sources inline, and links back to the idea note that started it. The report is just a note — you can edit it, link it, fold it into other writing.
+
+The research itself is done by [open-deep-research](https://github.com/langchain-ai/open_deep_research), which runs search queries, pulls and reads pages, and iterates until it has enough to write a coherent synthesis. It's not fast (expect several minutes per run), but it's thorough in a way that a single prompt isn't.
 
 ---
 
@@ -14,27 +22,29 @@ Ideas move through five stages:
 Backlog → To Refine → To Research → Researching → Completed
 ```
 
-**Backlog** — capture anything. A question, a topic, a passage you selected. Use the command palette or drag selected text straight into a note.
+**Backlog** — capture anything: a question you're sitting on, a topic you want to understand, a passage you highlighted. Use the command palette or drag selected text into a note.
 
-**To Refine** — an LLM reads the note and suggests clarifying questions (what outcome would make this useful, what constraints apply, what you already know). Answer them in the note. Skip this step if the idea is already clear enough.
+**To Refine** — an LLM reads the note and suggests clarifying questions: what outcome would make this useful, what you already know, what constraints apply. Answer them in the note. Skip this step if the question is already sharp enough.
 
-**To Research** — ready to run. Start a deep research job from here.
+**To Research** — ready to run. Start a research job from here.
 
-**Researching** — the sidecar runs in the background, searches the web, and writes a `report.md` into your vault. The sidebar card shows live progress.
+**Researching** — runs in the background. The sidebar card shows live progress. When it finishes, `report.md` is in your vault.
 
-**Completed** — report is in your vault, linked from the idea note.
+**Completed** — report is written and linked from the idea note.
 
-You can drag cards forward, right-click for any move (including backward), or use commands from the active note.
+Drag cards forward, right-click for any move (including backward), or run commands from the active note.
 
 ---
 
 ## What you need
 
-- Obsidian 1.5+ (desktop only — the sidecar is a subprocess)
-- An LLM for question generation: Ollama, OpenAI, Anthropic, OpenRouter, or any OpenAI-compatible endpoint
-- Python 3 + [open-deep-research](https://github.com/langchain-ai/open_deep_research) for the research step (optional — everything else works without it)
+- Obsidian 1.5+ (desktop only — the research process runs as a subprocess)
+- An LLM for the refinement step: Ollama, OpenAI, Anthropic, OpenRouter, or any OpenAI-compatible endpoint
+- Python 3 + [open-deep-research](https://github.com/langchain-ai/open_deep_research) for the research step
 
-If you skip the LLM setup, question generation falls back to three generic placeholder questions you can fill in manually. If you skip the Python setup, you can still use the plugin for capture, organisation, and manual research.
+The research step is the point of the plugin, but everything else — capture, refinement, organisation — works without it. If you skip Python setup, you can still use the sidebar to manage ideas manually.
+
+If you skip LLM setup, question generation falls back to three generic placeholders you can fill in yourself.
 
 ---
 
@@ -44,14 +54,14 @@ If you skip the LLM setup, question generation falls back to three generic place
 
 **2. Set your LLM** — Settings → Researcher → LLM provider. Pick a provider, paste an API key, set a model name. Ollama works out of the box if it's running locally.
 
-**3. Set up deep research** (optional) — run the setup script from the plugin's sidecar folder:
+**3. Set up deep research** — run the setup script from the plugin's sidecar folder:
 
 ```bash
 cd /path/to/vault/.obsidian/plugins/researcher/sidecar
 ./setup-open-deep-research.sh
 ```
 
-This creates a Python venv and installs `open-deep-research`. The script prints the exact path to set as **Python command** in settings.
+This creates a Python venv and installs `open-deep-research`. The script prints the exact path to paste as **Python command** in settings.
 
 You'll also need API keys for a search backend (Tavily is the default) and for whichever model you're using for research. Set these in your shell environment before launching Obsidian — they're not stored in the vault.
 
@@ -84,7 +94,7 @@ You'll also need API keys for a search backend (Tavily is the default) and for w
 
 ---
 
-## Deep research details
+## Research output
 
 Each run creates a folder under `Research Runs/`:
 
@@ -100,7 +110,7 @@ The sidecar supports three engines, set via **Sidecar engine** in settings or th
 
 - `auto` — uses open-deep-research if importable, otherwise falls back to the stub
 - `open_deep_research` — requires the installed venv
-- `stub` — deterministic, no web access (useful for testing the workflow without API credits)
+- `stub` — deterministic, no web access (useful for testing the workflow without spending API credits)
 
 **Optional env vars** (override what's set in plugin settings):
 
@@ -115,7 +125,7 @@ RESEARCHER_MAX_TOOL_CALLS        # default 8
 RESEARCHER_MAX_CONCURRENCY       # default 4
 ```
 
-API keys (`OPENAI_API_KEY`, `TAVILY_API_KEY`, etc.) are read from your shell environment. They are not written into the vault.
+API keys (`OPENAI_API_KEY`, `TAVILY_API_KEY`, etc.) are read from your shell environment and are not written into the vault.
 
 ---
 

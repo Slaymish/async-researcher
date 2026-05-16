@@ -15,11 +15,11 @@
 - [x] "Mark as done" for in-progress items (skip research, close out idea)
 
 ## v0.5.0 — Sidebar search & filtering
-- [ ] Search/filter bar to filter cards by title text
-- [ ] Filter by vault tag
-- [ ] Priority field (`research-priority: high/normal/low`) on research ideas
-- [ ] Collapse group columns by clicking the header
-- [ ] Active run count badge on ribbon icon
+- [x] Search/filter bar to filter cards by title text
+- [x] Filter by vault tag
+- [x] Priority field (`research-priority: high/normal/low`) on research ideas
+- [x] Collapse group columns by clicking the header
+- [x] Active run count badge on ribbon icon
 
 ## v0.6.0 — Research note templates
 - [ ] Custom question templates (vault note that defines default clarifying questions)

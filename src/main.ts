@@ -31,6 +31,10 @@ const STATUS_ORDER = [
 ] as const;
 
 type ResearchStatus = (typeof STATUS_ORDER)[number];
+
+type ResearchPriority = "high" | "normal" | "low";
+const PRIORITY_ORDER: Record<ResearchPriority, number> = { high: 0, normal: 1, low: 2 };
+
 interface ResearcherSettings {
   researchFolder: string;
   outputFolder: string;
@@ -56,6 +60,8 @@ interface ResearchItem {
   outputLink?: string;
   questionProgress: QuestionProgress;
   latestRun?: ResearchRunSummary;
+  priority: ResearchPriority;
+  tags: string[];
 }
 
 interface LlmProvider {
@@ -357,6 +363,21 @@ class ResearchStore {
         typeof frontmatter["research-output"] === "string"
           ? frontmatter["research-output"]
           : undefined;
+
+      const rawPriority = frontmatter["research-priority"];
+      const priority: ResearchPriority =
+        rawPriority === "high" || rawPriority === "low" ? rawPriority : "normal";
+
+      const rawTags = frontmatter["tags"];
+      const allRawTags: string[] = Array.isArray(rawTags)
+        ? (rawTags as string[])
+        : typeof rawTags === "string" && rawTags
+          ? [rawTags as string]
+          : [];
+      const tags = allRawTags
+        .map((t) => String(t).replace(/^#/, ""))
+        .filter((t) => t !== "research/idea");
+
       const content = await this.app.vault.cachedRead(file);
 
       items.push({
@@ -366,12 +387,16 @@ class ResearchStore {
         file,
         outputLink,
         questionProgress: this.parser.parseQuestionProgress(content),
+        priority,
+        tags,
       });
     }
 
     return items.sort((a, b) => {
       const statusDelta = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
       if (statusDelta !== 0) return statusDelta;
+      const priorityDelta = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+      if (priorityDelta !== 0) return priorityDelta;
       return a.title.localeCompare(b.title);
     });
   }
@@ -901,6 +926,9 @@ class ResearcherView extends ItemView {
   private draggedItem: ResearchItem | null = null;
   private isDragging = false;
   private dragPlaceholder: HTMLElement | null = null;
+  private filterText = "";
+  private filterTag: string | null = null;
+  private collapsedGroups = new Set<ResearchStatus>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -928,14 +956,34 @@ class ResearcherView extends ItemView {
   async render() {
     if (this.isDragging) return;
 
-    const items = await this.plugin.store.attachLatestRuns(
+    const allItems = await this.plugin.store.attachLatestRuns(
       await this.plugin.store.list(),
       this.plugin.runStore,
     );
+
+    // Collect all unique tags across every research item (excluding always-present research/idea)
+    const allTagsSet = new Set<string>();
+    for (const item of allItems) {
+      for (const tag of item.tags) allTagsSet.add(tag);
+    }
+    const allTags = [...allTagsSet].sort();
+
+    // Apply filters
+    let visibleItems = allItems;
+    if (this.filterText.trim()) {
+      const query = this.filterText.toLowerCase();
+      visibleItems = visibleItems.filter((item) => item.title.toLowerCase().includes(query));
+    }
+    if (this.filterTag) {
+      const tag = this.filterTag;
+      visibleItems = visibleItems.filter((item) => item.tags.includes(tag));
+    }
+
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("researcher-view");
 
+    // ── Header ────────────────────────────────────────────────────────────────
     const headerEl = contentEl.createDiv({ cls: "researcher-view__header" });
     headerEl.createDiv({ cls: "researcher-view__title", text: "Researcher" });
     const createButton = headerEl.createEl("button", {
@@ -944,14 +992,42 @@ class ResearcherView extends ItemView {
     });
     createButton.addEventListener("click", () => this.plugin.openCreateModal(""));
 
+    // ── Filter bar ────────────────────────────────────────────────────────────
+    const filterEl = contentEl.createDiv({ cls: "researcher-view__filter" });
+    const searchInput = filterEl.createEl("input", {
+      cls: "researcher-view__search",
+      attr: { type: "text", placeholder: "Search ideas…" },
+    });
+    searchInput.value = this.filterText;
+    searchInput.addEventListener("input", () => {
+      this.filterText = searchInput.value;
+      void this.render();
+    });
+
+    if (allTags.length > 0) {
+      const tagRowEl = filterEl.createDiv({ cls: "researcher-view__tag-filter" });
+      for (const tag of allTags) {
+        const isActive = this.filterTag === tag;
+        const chipEl = tagRowEl.createEl("button", {
+          cls: `researcher-view__tag-chip${isActive ? " researcher-view__tag-chip--active" : ""}`,
+          text: `#${tag}`,
+        });
+        chipEl.addEventListener("click", () => {
+          this.filterTag = isActive ? null : tag;
+          void this.render();
+        });
+      }
+    }
+
     const bodyEl = contentEl.createDiv({ cls: "researcher-view__content" });
 
     for (const status of STATUS_ORDER) {
-      const groupItems = items.filter((item) => item.status === status);
+      const groupItems = visibleItems.filter((item) => item.status === status);
+      const isCollapsed = this.collapsedGroups.has(status);
       const groupEl = bodyEl.createDiv({ cls: "researcher-view__group" });
 
       const acceptsFrom = DROP_TARGETS[status];
-      if (acceptsFrom) {
+      if (acceptsFrom && !isCollapsed) {
         groupEl.addEventListener("dragover", (e) => {
           if (this.draggedItem?.status !== acceptsFrom) return;
           e.preventDefault();
@@ -985,9 +1061,23 @@ class ResearcherView extends ItemView {
       const groupHeaderEl = groupEl.createDiv({ cls: "researcher-view__group-header" });
       groupHeaderEl.createSpan({ text: STATUS_LABELS[status] });
       groupHeaderEl.createSpan({ cls: "researcher-view__group-count", text: String(groupItems.length) });
+      groupHeaderEl.createSpan({
+        cls: `researcher-view__group-chevron${isCollapsed ? " researcher-view__group-chevron--collapsed" : ""}`,
+      });
+      groupHeaderEl.addEventListener("click", () => {
+        if (this.collapsedGroups.has(status)) {
+          this.collapsedGroups.delete(status);
+        } else {
+          this.collapsedGroups.add(status);
+        }
+        void this.render();
+      });
+
+      if (isCollapsed) continue;
 
       if (groupItems.length === 0) {
-        const emptyText = acceptsFrom ? "Drop here" : "Empty";
+        const isFiltered = Boolean(this.filterText.trim() || this.filterTag);
+        const emptyText = acceptsFrom && !isFiltered ? "Drop here" : isFiltered ? "No matches" : "Empty";
         groupEl.createDiv({ cls: "researcher-view__empty", text: emptyText });
         continue;
       }
@@ -1027,7 +1117,14 @@ class ResearcherView extends ItemView {
 
         groupEl.dataset["status"] = status;
 
-        cardEl.createDiv({ cls: "researcher-card__title", text: item.title });
+        const cardHeaderEl = cardEl.createDiv({ cls: "researcher-card__header" });
+        cardHeaderEl.createDiv({ cls: "researcher-card__title", text: item.title });
+        if (item.priority !== "normal") {
+          cardHeaderEl.createSpan({
+            cls: `researcher-card__priority researcher-card__priority--${item.priority}`,
+            text: item.priority,
+          });
+        }
 
         const { answered, total } = item.questionProgress;
         const hasQuestions = total > 0;
@@ -1436,6 +1533,7 @@ export default class ResearcherPlugin extends Plugin {
   runStore: ResearchRunStore = new ResearchRunStore(this.app, this);
   deepResearchRunner: DeepResearchRunner = new SidecarDeepResearchRunner(this.app, this);
   queue: ResearchQueue = new ResearchQueue(this, new ResearchQuestionProvider(this.settings));
+  private ribbonEl: HTMLElement | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -1450,7 +1548,7 @@ export default class ResearcherPlugin extends Plugin {
       (leaf) => new ResearcherView(leaf, this),
     );
 
-    this.addRibbonIcon("search", "Open Researcher", () => {
+    this.ribbonEl = this.addRibbonIcon("search", "Open Researcher", () => {
       void this.activateView();
     });
 
@@ -1528,7 +1626,7 @@ export default class ResearcherPlugin extends Plugin {
     }, 5000));
 
     this.app.workspace.onLayoutReady(() => {
-      void this.reconcileStuckRuns();
+      void this.reconcileStuckRuns().then(() => this.updateRibbonBadge());
     });
   }
 
@@ -1676,6 +1774,25 @@ export default class ResearcherPlugin extends Plugin {
       const view = leaf.view;
       if (view instanceof ResearcherView) await view.render();
     }
+    this.updateRibbonBadge();
+  }
+
+  updateRibbonBadge() {
+    if (!this.ribbonEl) return;
+    const activeCount = this.app.vault.getMarkdownFiles().filter((file) => {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      return fm?.["research-status"] === "researching";
+    }).length;
+
+    let badge = this.ribbonEl.querySelector<HTMLElement>(".researcher-ribbon-badge");
+    if (activeCount === 0) {
+      badge?.remove();
+      return;
+    }
+    if (!badge) {
+      badge = this.ribbonEl.createDiv({ cls: "researcher-ribbon-badge" });
+    }
+    badge.setText(String(activeCount));
   }
 
   private refreshIfMarkdown(file: TAbstractFile) {
