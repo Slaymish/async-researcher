@@ -1,5 +1,10 @@
 {
   "disabledMcpjsonServers": [
     "shadcn"
-  ]
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck *)"
+    ]
+  }
 }

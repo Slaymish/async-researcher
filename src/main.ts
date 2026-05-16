@@ -5,6 +5,7 @@ import {
   FileSystemAdapter,
   ItemView,
   MarkdownView,
+  Menu,
   Modal,
   Notice,
   Plugin,
@@ -853,6 +854,41 @@ class StartDeepResearchModal extends Modal {
   }
 }
 
+class ConfirmDeleteModal extends Modal {
+  constructor(
+    app: App,
+    private readonly item: ResearchItem,
+    private readonly onConfirm: () => Promise<void>,
+  ) {
+    super(app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Delete research idea" });
+    contentEl.createEl("p", {
+      text: `Delete "${this.item.title}"? This permanently deletes the note.`,
+      cls: "researcher-modal__desc",
+    });
+
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn.setButtonText("Delete").setWarning().onClick(async () => {
+          this.close();
+          await this.onConfirm();
+        }),
+      )
+      .addButton((btn) =>
+        btn.setButtonText("Cancel").onClick(() => this.close()),
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
 const ACTIVE_RUN_STATUSES = new Set<ResearchRunStatus>(["queued", "planning", "searching", "fetching", "synthesizing"]);
 
 const DROP_TARGETS: Partial<Record<ResearchStatus, ResearchStatus>> = {
@@ -1006,10 +1042,22 @@ class ResearcherView extends ItemView {
             });
           }
           if (hasOutput) {
-            metaEl.createSpan({
-              cls: "researcher-card__chip researcher-card__chip--done",
-              text: "Report ready",
+            const reportChip = metaEl.createDiv({
+              cls: "researcher-card__chip researcher-card__chip--done researcher-card__chip--actionable",
+              text: "Report ready →",
+              attr: { role: "button" },
             });
+            const reportLinkPath = extractWikilinkPath(item.outputLink ?? "");
+            if (reportLinkPath) {
+              reportChip.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const reportFile = this.plugin.app.metadataCache.getFirstLinkpathDest(
+                  reportLinkPath,
+                  item.file.path,
+                );
+                if (reportFile) void this.plugin.app.workspace.getLeaf(false).openFile(reportFile);
+              });
+            }
           }
         }
 
@@ -1045,7 +1093,24 @@ class ResearcherView extends ItemView {
               text: item.latestRun.message,
             });
           }
+
+          if (isFailed) {
+            const retryEl = runEl.createDiv({
+              cls: "researcher-card__retry",
+              text: "Retry",
+              attr: { role: "button" },
+            });
+            retryEl.addEventListener("click", (e) => {
+              e.stopPropagation();
+              void this.plugin.startDeepResearchForFile(item.file);
+            });
+          }
         }
+
+        cardEl.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this.openCardMenu(item, e);
+        });
 
         cardEl.addEventListener("click", () => {
           if (this.isDragging) return;
@@ -1053,6 +1118,129 @@ class ResearcherView extends ItemView {
         });
       }
     }
+  }
+
+  private openCardMenu(item: ResearchItem, event: MouseEvent) {
+    const menu = new Menu();
+
+    menu.addItem((i) =>
+      i.setTitle("Open note").setIcon("file-text").onClick(() => {
+        void this.plugin.app.workspace.getLeaf(false).openFile(item.file);
+      }),
+    );
+
+    menu.addSeparator();
+
+    if (item.status === "backlog") {
+      menu.addItem((i) =>
+        i.setTitle("Move to Refine →").setIcon("arrow-right").onClick(() => {
+          new QuestionGenerationModal(
+            this.app, item,
+            async () => {
+              await this.plugin.store.moveStatus(item.file, "to-refine");
+              await this.plugin.refreshViews();
+              await this.plugin.queue.generateQuestionsForFile(item.file);
+            },
+            async () => {
+              await this.plugin.store.moveStatus(item.file, "to-research");
+              await this.plugin.refreshViews();
+            },
+          ).open();
+        }),
+      );
+    }
+
+    if (item.status === "to-refine") {
+      menu.addItem((i) =>
+        i.setTitle("Move to Research →").setIcon("arrow-right").onClick(() => {
+          new StartDeepResearchModal(this.app, item, async () => {
+            await this.plugin.startDeepResearchForFile(item.file);
+          }).open();
+        }),
+      );
+    }
+
+    if (item.status === "to-research") {
+      menu.addItem((i) =>
+        i.setTitle("Start deep research →").setIcon("play").onClick(() => {
+          new StartDeepResearchModal(this.app, item, async () => {
+            await this.plugin.startDeepResearchForFile(item.file);
+          }).open();
+        }),
+      );
+    }
+
+    const reportLinkPath = item.outputLink ? extractWikilinkPath(item.outputLink) : null;
+    if (reportLinkPath) {
+      menu.addItem((i) =>
+        i.setTitle("Open report").setIcon("book-open").onClick(() => {
+          const reportFile = this.plugin.app.metadataCache.getFirstLinkpathDest(
+            reportLinkPath,
+            item.file.path,
+          );
+          if (reportFile) void this.plugin.app.workspace.getLeaf(false).openFile(reportFile);
+        }),
+      );
+    }
+
+    if (item.status === "to-refine") {
+      menu.addItem((i) =>
+        i.setTitle("← Send back to Backlog").setIcon("arrow-left").onClick(async () => {
+          await this.plugin.store.moveStatus(item.file, "backlog");
+          await this.plugin.refreshViews();
+        }),
+      );
+    }
+
+    if (item.status === "to-research") {
+      menu.addItem((i) =>
+        i.setTitle("← Send back to Refine").setIcon("arrow-left").onClick(async () => {
+          await this.plugin.store.moveStatus(item.file, "to-refine");
+          await this.plugin.refreshViews();
+        }),
+      );
+    }
+
+    if (item.status === "researching") {
+      menu.addItem((i) =>
+        i.setTitle("← Reset to To Research").setIcon("rotate-ccw").onClick(async () => {
+          await this.plugin.store.moveStatus(item.file, "to-research");
+          await this.plugin.refreshViews();
+        }),
+      );
+    }
+
+    if (item.status === "completed") {
+      menu.addItem((i) =>
+        i.setTitle("← Reopen").setIcon("rotate-ccw").onClick(async () => {
+          await this.plugin.store.moveStatus(item.file, "to-research");
+          await this.plugin.refreshViews();
+        }),
+      );
+    }
+
+    if (item.status !== "completed") {
+      menu.addSeparator();
+      menu.addItem((i) =>
+        i.setTitle("Mark as done").setIcon("check").onClick(async () => {
+          await this.plugin.store.moveStatus(item.file, "completed");
+          await this.plugin.refreshViews();
+        }),
+      );
+    }
+
+    menu.addSeparator();
+
+    menu.addItem((i) =>
+      i.setTitle("Delete idea").setIcon("trash").onClick(() => {
+        new ConfirmDeleteModal(this.app, item, async () => {
+          await this.plugin.app.vault.delete(item.file);
+          await this.plugin.refreshViews();
+        }).open();
+      }),
+    );
+
+    menu.showAtMouseEvent(event);
   }
 
   private async handleDrop(item: ResearchItem, targetStatus: ResearchStatus) {
@@ -1086,7 +1274,13 @@ class ResearcherView extends ItemView {
 }
 
 function formatRunStatus(status: ResearchRunStatus) {
-  return status.replace("-", " ");
+  const s = status.replaceAll("-", " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function extractWikilinkPath(link: string): string | null {
+  const match = link.match(/\[\[(.+?)(?:\|.+?)?\]\]/);
+  return match ? match[1] : null;
 }
 
 class ResearcherSettingTab extends PluginSettingTab {
@@ -1330,8 +1524,12 @@ export default class ResearcherPlugin extends Plugin {
     this.registerEvent(this.app.vault.on("modify", (file) => this.refreshIfRunFile(file)));
     this.registerEvent(this.app.vault.on("rename", (file) => this.refreshIfMarkdown(file)));
     this.registerInterval(window.setInterval(() => {
-      void this.refreshViews();
+      if (this.hasResearchingNotes()) void this.refreshViews();
     }, 5000));
+
+    this.app.workspace.onLayoutReady(() => {
+      void this.reconcileStuckRuns();
+    });
   }
 
   onunload() {
@@ -1434,6 +1632,43 @@ export default class ResearcherPlugin extends Plugin {
       return;
     }
     await this.startDeepResearchForFile(file);
+  }
+
+  hasResearchingNotes(): boolean {
+    return this.app.vault.getMarkdownFiles().some((file) => {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      return fm?.["research-status"] === "researching";
+    });
+  }
+
+  private async reconcileStuckRuns() {
+    const stuck = this.app.vault.getMarkdownFiles().filter((file) => {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      return fm?.["research-status"] === "researching";
+    });
+
+    if (stuck.length === 0) return;
+
+    const summaries = await this.runStore.latestByNotePath();
+    let changed = false;
+
+    for (const file of stuck) {
+      const summary = summaries.get(file.path);
+
+      if (!summary || summary.status === "failed") {
+        await this.store.moveStatus(file, "to-research");
+        changed = true;
+      } else if (summary.status === "completed") {
+        const runFile = this.app.vault.getAbstractFileByPath(`${summary.runFolder}/run.json`);
+        if (runFile instanceof TFile) {
+          await this.runStore.syncCompletedRunFromFile(runFile);
+          changed = true;
+        }
+      }
+      // Active statuses: leave as-is — the sidecar is still running.
+    }
+
+    if (changed) await this.refreshViews();
   }
 
   async refreshViews() {

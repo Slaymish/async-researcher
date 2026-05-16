@@ -211,6 +211,36 @@
   background: color-mix(in srgb, var(--text-error) 10%, transparent);
 }
 
+.researcher-card__chip--actionable {
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.researcher-card__chip--actionable:hover {
+  filter: brightness(1.15);
+}
+
+.researcher-card__retry {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--size-2-1);
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--interactive-normal);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  align-self: flex-start;
+}
+
+.researcher-card__retry:hover {
+  background: var(--interactive-hover);
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
 /* ── Progress ─────────────────────────────────────────────────────────────── */
 
 .researcher-card__run {
