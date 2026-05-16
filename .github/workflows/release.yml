@@ -1,0 +1,60 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Build plugin
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Attest build artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          notes_file="$(mktemp)"
+          if [ -f CHANGELOG.md ]; then
+            awk -v tag="$tag" '
+              BEGIN { in_section = 0 }
+              /^## / {
+                if (in_section) { exit }
+                if (index($0, tag) > 0) { in_section = 1; next }
+              }
+              in_section { print }
+            ' CHANGELOG.md > "$notes_file"
+          fi
+          if [ ! -s "$notes_file" ]; then
+            printf "Release %s of the Synod Obsidian plugin.\n\nSee the [README](https://github.com/Slaymish/synod#readme) for setup and usage. Full commit history: https://github.com/Slaymish/synod/commits/%s\n" "$tag" "$tag" > "$notes_file"
+          fi
+          gh release create "$tag" \
+            --title="$tag" \
+            --notes-file "$notes_file" \
+            --draft \
+            main.js manifest.json styles.css
