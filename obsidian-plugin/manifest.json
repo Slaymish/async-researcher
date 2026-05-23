@@ -1,9 +1,9 @@
 {
   "id": "researcher",
-  "name": "Async Researcher",
+  "name": "Vault Mind",
   "version": "0.7.2",
   "minAppVersion": "1.5.0",
-  "description": "Surface related notes and research your vault with local AI — no data leaves your machine.",
+  "description": "Your vault's memory and research engine, running locally.",
   "author": "Hamish Burke",
   "authorUrl": "https://github.com/Slaymish",
   "isDesktopOnly": true

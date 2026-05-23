@@ -1,12 +1,16 @@
-# AI OS — Async Researcher
+# Vault Mind
 
-A local-first AI system that turns an Obsidian vault from a passive store of notes into an active research collaborator. Runs entirely on local hardware — vault contents never leave the machine.
+Your vault's memory and research engine, running locally.
+
+Vault Mind turns an Obsidian vault from a passive store of notes into an active research collaborator. It runs entirely on local hardware — vault contents never leave the machine.
 
 ## What it does
 
 **Proactive surfacing** — as you open or edit a note, the plugin pushes related notes, forgotten threads, and connections you wouldn't have made manually into a side panel.
 
 **Deep research on demand** — ask a complex question and the system retrieves relevant vault content, synthesises a long-form report, and verifies every citation against a real `^id` block in your notes. No hallucinated references. Progress streams live as the local model works.
+
+**Cross-session memory** — the system remembers what you've researched before and uses that context to focus future research plans.
 
 ## Architecture
 
@@ -18,7 +22,7 @@ Obsidian plugin  ↔  FastAPI orchestrator (:8765)  ↔  Ollama (:11434)
 
 - **`obsidian-plugin/`** — TypeScript plugin (esbuild). The only HTTP client. Handles surfacing side panel (related notes), deep research modal with live SSE progress, and report note writing.
 - **`apps/orchestrator/`** — Python FastAPI backend. Thin routes; logic lives in `flows/`. Runs the always-on file watcher in-process.
-- **`packages/`** — Python libraries: `ingestion`, `retrieval`, `citation`, `inference`, `memory` (stub), `web` (stub).
+- **`packages/`** — Python libraries: `ingestion`, `retrieval`, `citation`, `inference`, `memory`, `web`.
 - **`eval/`** — eval harness + datasets for validating retrieval and citation quality.
 
 ## Quick start
@@ -41,7 +45,7 @@ make dev
 
 # Build and symlink the plugin into your vault
 make plugin-build
-ln -s "$(pwd)/obsidian-plugin" "<vault>/.obsidian/plugins/ai-os"
+ln -s "$(pwd)/obsidian-plugin" "<vault>/.obsidian/plugins/vault-mind"
 # Then enable it in Obsidian → Settings → Community plugins
 ```
 
@@ -60,7 +64,7 @@ make format        # ruff format + autofix
 
 ## Tech stack
 
-- **Python 3.12** — `uv` workspaces, FastAPI, LightRAG, DuckDB, watchdog
+- **Python 3.12** — `uv` workspaces, FastAPI, LightRAG, DuckDB, LangGraph, mem0ai
 - **TypeScript** — Obsidian API, esbuild
 - **Ollama** — local inference via OpenAI-compatible API
 - **pnpm** — Node package manager
