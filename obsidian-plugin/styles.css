@@ -280,11 +280,11 @@
   margin-top: var(--size-4-2);
 }
 
-.ai-os-setup-modal__qs-label {
+.ai-os-setup-modal .ai-os-setup-modal__qs-label {
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-semibold);
   color: var(--text-muted);
-  margin: 0 0 var(--size-2-1) !important;
+  margin: 0 0 var(--size-2-1);
 }
 
 .ai-os-setup-modal__code-wrap {
