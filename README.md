@@ -1,8 +1,8 @@
-# Vault Mind
+# Lumen
 
 Your vault's memory and research engine, running locally.
 
-Vault Mind turns an Obsidian vault from a passive store of notes into an active research collaborator. It runs entirely on local hardware — vault contents never leave the machine.
+Lumen turns an Obsidian vault from a passive store of notes into an active research collaborator. It runs entirely on local hardware — vault contents never leave the machine.
 
 ## What it does
 
@@ -45,7 +45,7 @@ make dev
 
 # Build and symlink the plugin into your vault
 make plugin-build
-ln -s "$(pwd)/obsidian-plugin" "<vault>/.obsidian/plugins/vault-mind"
+ln -s "$(pwd)/obsidian-plugin" "<vault>/.obsidian/plugins/lumen"
 # Then enable it in Obsidian → Settings → Community plugins
 ```
 
@@ -73,13 +73,13 @@ make format        # ruff format + autofix
 
 All architectural reasoning lives in `docs/`:
 
-| File | Contents |
-|------|----------|
-| `docs/00_VISION.md` | What this is and who it's for |
-| `docs/01_MVP_SCOPE.md` | v0.1 scope and success criteria |
-| `docs/02_COMPONENT_MAP.md` | Every component, status, and interface |
-| `docs/03_ROADMAP.md` | Phased delivery with entry-criteria gates |
-| `docs/04_PROJECT_STRUCTURE.md` | Repo layout and rationale |
-| `docs/05_DECISIONS.md` | ADR log |
+| File                           | Contents                                  |
+| ------------------------------ | ----------------------------------------- |
+| `docs/00_VISION.md`            | What this is and who it's for             |
+| `docs/01_MVP_SCOPE.md`         | v0.1 scope and success criteria           |
+| `docs/02_COMPONENT_MAP.md`     | Every component, status, and interface    |
+| `docs/03_ROADMAP.md`           | Phased delivery with entry-criteria gates |
+| `docs/04_PROJECT_STRUCTURE.md` | Repo layout and rationale                 |
+| `docs/05_DECISIONS.md`         | ADR log                                   |
 
 Source specs (`ArchitectureSpecification.md`, `LocalAgenticRAGArch.md`) at the repo root are the north star — not a literal build list.
