@@ -15,8 +15,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Obsidian plugin build output
+# Obsidian plugin build output and persisted user settings
 obsidian-plugin/main.js
+obsidian-plugin/data.json
 
 # Local config & secrets (per ADR-0016)
 config.toml

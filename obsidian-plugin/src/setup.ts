@@ -62,8 +62,8 @@ export class SetupModal extends Modal {
         const pre = el.createEl("pre");
         pre.createEl("code", {
           text: [
-            "git clone https://github.com/hamish-hb/ai-os",
-            "cd ai-os",
+            "git clone https://github.com/Slaymish/async-researcher",
+            "cd async-researcher",
             "pip install uv   # skip if uv already installed",
             "uv sync",
           ].join("\n"),

@@ -1,0 +1,49 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin
+        run: pnpm --filter obsidian-plugin build
+
+      # Validate that the tag matches the version in manifest.json
+      - name: Check version matches tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MANIFEST_VERSION=$(node -p "require('./obsidian-plugin/manifest.json').version")
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "Error: tag '$TAG' does not match manifest.json version '$MANIFEST_VERSION'"
+            exit 1
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            obsidian-plugin/main.js
+            obsidian-plugin/manifest.json
+            obsidian-plugin/styles.css
