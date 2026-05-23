@@ -51,13 +51,13 @@ export default class AiOsPlugin extends Plugin {
       (leaf) => new SurfacingView(leaf, this),
     );
 
-    this.addRibbonIcon("search", "Open AI OS related panel", () => {
+    this.addRibbonIcon("brain", "Open related notes", () => {
       void activateSurfacingView(this);
     });
 
     this.addCommand({
       id: "open-surfacing-panel",
-      name: "Open related panel",
+      name: "Open related notes",
       callback: () => {
         void activateSurfacingView(this);
       },
@@ -65,7 +65,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "refresh-surfacing",
-      name: "Refresh related panel",
+      name: "Refresh related notes",
       callback: () => {
         const active = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!active?.file) {
@@ -78,7 +78,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "deep-research",
-      name: "Deep research",
+      name: "Research a question",
       callback: () => {
         new ResearchQueryModal(this.app, this).open();
       },
@@ -86,7 +86,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "deep-research-from-selection",
-      name: "Deep research from selection",
+      name: "Research selected text",
       editorCallback: (editor) => {
         const selection = editor.getSelection().trim();
         new ResearchQueryModal(this.app, this, {
@@ -97,7 +97,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "deep-research-from-active-note",
-      name: "Deep research from active note (use as spec)",
+      name: "Research using active note",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
         const eligible = !!file && file.extension === "md";
@@ -110,7 +110,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "check-backend-health",
-      name: "Check orchestrator health",
+      name: "Check connection",
       callback: () => {
         void this.checkHealth();
       },
@@ -118,7 +118,7 @@ export default class AiOsPlugin extends Plugin {
 
     this.addCommand({
       id: "open-setup-guide",
-      name: "Open backend setup guide",
+      name: "Open setup guide",
       callback: () => {
         new SetupModal(this.app).open();
       },
@@ -151,8 +151,8 @@ export default class AiOsPlugin extends Plugin {
     if (!(file instanceof TFile) || file.extension !== "md") return;
     menu.addItem((item) =>
       item
-        .setTitle("Deep research using this note")
-        .setIcon("search")
+        .setTitle("Research this note")
+        .setIcon("brain")
         .onClick(() => {
           void this.openResearchFromNote(file);
         }),
@@ -269,47 +269,38 @@ export default class AiOsPlugin extends Plugin {
     options: ResearchRunOptions = {},
   ): Promise<TFile | null> {
     const notice = new Notice(`Researching: ${truncate(query, 80)}…`, 0);
-    const startedAt = Date.now();
-    const progress = (message: string) => {
+    const onProgress = (message: string) => {
       options.onProgress?.(message);
       this.setResearchStatus(message);
       notice.setMessage(message);
     };
-    progress(
-      `Research started — retrieving, synthesising, and verifying citations (${formatElapsed(0)})`,
-    );
-    const timer = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      progress(
-        `Research still running — local inference is working (${formatElapsed(elapsed)})`,
-      );
-    }, 5000);
     try {
-      const response = await this.api.research({
-        query,
-        k: this.settings.researchK,
-        max_repair_attempts: this.settings.researchMaxRepairAttempts,
-        max_sub_queries: options.maxSubQueries,
-        decompose: settingToDecompose(this.settings.researchDecompose),
-      });
-      progress("Research complete — writing report note…");
+      const response = await this.api.researchStream(
+        {
+          query,
+          k: this.settings.researchK,
+          max_repair_attempts: this.settings.researchMaxRepairAttempts,
+          max_sub_queries: options.maxSubQueries,
+          decompose: settingToDecompose(this.settings.researchDecompose),
+        },
+        onProgress,
+      );
+      onProgress("Writing report…");
       const file = await writeReportNote(this, response, options);
-      window.clearInterval(timer);
       this.clearResearchStatus();
       notice.hide();
       new Notice(
-        `Research complete — ${(response.pass_rate * 100).toFixed(0)}% citations verified` +
+        `Report written — ${(response.pass_rate * 100).toFixed(0)}% citations verified` +
           (response.failures.length > 0
-            ? ` (${response.failures.length} failures)`
+            ? ` (${response.failures.length} unverified)`
             : ""),
       );
       return file;
     } catch (e) {
-      window.clearInterval(timer);
       notice.hide();
       const msg =
         e instanceof ApiError
-          ? `Orchestrator HTTP ${e.status}: ${e.body.slice(0, 200)}`
+          ? `HTTP ${e.status}: ${e.body.slice(0, 200)}`
           : (e as Error).message;
       new Notice(`Research failed: ${msg}`);
       throw e;
@@ -323,10 +314,9 @@ export default class AiOsPlugin extends Plugin {
       await this.api.health();
     } catch {
       const n = new Notice(
-        "AI OS: Backend not running — open Settings → AI OS for setup instructions.",
+        "Researcher: Backend not running — open Settings → Researcher to set up.",
         0,
       );
-      // Give the notice a clickable "Setup" button.
       const btn = n.noticeEl.createEl("button", {
         text: "Open setup guide",
         cls: "ai-os-notice-btn",
@@ -344,11 +334,11 @@ export default class AiOsPlugin extends Plugin {
     try {
       const h = await this.api.health();
       new Notice(
-        `Orchestrator OK — vault=${h.vault ?? "?"} files=${h.file_count} chunks=${h.chunk_count}`,
+        `Connected — ${h.file_count} notes, ${h.chunk_count} blocks indexed`,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const n = new Notice(`Orchestrator unreachable: ${msg}`, 0);
+      const n = new Notice(`Could not connect: ${msg}`, 0);
       const btn = n.noticeEl.createEl("button", {
         text: "Open setup guide",
         cls: "ai-os-notice-btn",
@@ -364,7 +354,7 @@ export default class AiOsPlugin extends Plugin {
 
   private setResearchStatus(message: string): void {
     if (!this.researchStatusEl) return;
-    this.researchStatusEl.setText(`AI OS: ${message}`);
+    this.researchStatusEl.setText(`Researching: ${message}`);
     this.researchStatusEl.show();
   }
 

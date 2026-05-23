@@ -1,35 +1,17 @@
-// Plugin settings. See docs/01_MVP_SCOPE.md, docs/04_PROJECT_STRUCTURE.md.
-//
-// The plugin owns no model config — all inference happens server-side (ADR-0005,
-// ADR-0009). These knobs are HTTP + UX-only.
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type AiOsPlugin from "./main";
 import { SetupModal, getVaultPath } from "./setup";
 
 export interface AiOsSettings {
-  /** Orchestrator base URL. v0.1 is localhost-only. */
   backendUrl: string;
-  /** Vault folder where deep-research reports are written. */
   researchOutputFolder: string;
-  /** Surfacing side panel toggle. */
   surfacingEnabled: boolean;
-  /** Debounce window for active-leaf-change → /surface calls. */
   surfaceDebounceMs: number;
-  /** Top-K passed to /surface. */
   surfaceTopK: number;
-  /** Client-side similarity threshold for the surfacing panel (0..1). Results
-   *  with score < this are hidden in the side panel — the backend still returns
-   *  the full top-K, the slider just controls what's drawn. */
   surfaceMinScore: number;
-  /** Top-K passed to /research (retrieval breadth before synth). */
   researchK: number;
-  /** Bounded repair attempts the citation engine may take. */
   researchMaxRepairAttempts: number;
-  /** Atomizer override (v0.2.2, sign-off #7). "auto" lets the judge model
-   *  decide; true/false skips the Atomizer LLM call. */
   researchDecompose: "auto" | "always" | "never";
-  /** Append the v0.2.2 diagnostic shim (per-Executor retrieval log) to the
-   *  generated report. Off by default — keeps reports clean. Sign-off Q1. */
   researchShowDebug: boolean;
 }
 
@@ -57,10 +39,10 @@ export class AiOsSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "AI OS" });
+    containerEl.createEl("h2", { text: "Researcher" });
 
-    // ── Backend ──────────────────────────────────────────────────────────────
-    containerEl.createEl("h3", { text: "Backend" });
+    // ── Connection ───────────────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "Connection" });
 
     new Setting(containerEl)
       .setName("Setup guide")
@@ -87,8 +69,8 @@ export class AiOsSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Orchestrator URL")
-      .setDesc("The local FastAPI orchestrator. Defaults to localhost:8765.")
+      .setName("Backend URL")
+      .setDesc("URL of the local backend. Defaults to localhost:8765.")
       .addText((text) =>
         text
           .setPlaceholder(DEFAULT_SETTINGS.backendUrl)
@@ -101,7 +83,7 @@ export class AiOsSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Check connection")
-      .setDesc("Hit /health and report what the orchestrator sees.")
+      .setDesc("Test the connection to your local backend.")
       .addButton((btn) =>
         btn
           .setButtonText("Check")
@@ -110,12 +92,12 @@ export class AiOsSettingTab extends PluginSettingTab {
           }),
       );
 
-    // ── Surfacing ────────────────────────────────────────────────────────────
-    containerEl.createEl("h3", { text: "Proactive surfacing" });
+    // ── Related notes ────────────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "Related notes" });
 
     new Setting(containerEl)
       .setName("Enabled")
-      .setDesc("Push related blocks into the side panel when the active note changes.")
+      .setDesc("Automatically show related notes in the side panel as you navigate.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.surfacingEnabled).onChange(async (value) => {
           this.plugin.settings.surfacingEnabled = value;
@@ -124,8 +106,8 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Debounce (ms)")
-      .setDesc("Quiet window before sending the active note to /surface.")
+      .setName("Response delay (ms)")
+      .setDesc("How long to wait after switching notes before searching for related content.")
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.surfaceDebounceMs))
@@ -139,8 +121,8 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Top K")
-      .setDesc("Maximum related blocks to surface per note.")
+      .setName("Results count")
+      .setDesc("Maximum number of related passages to show per note.")
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.surfaceTopK))
@@ -153,8 +135,8 @@ export class AiOsSettingTab extends PluginSettingTab {
           }),
       );
 
-    // ── Deep research ────────────────────────────────────────────────────────
-    containerEl.createEl("h3", { text: "Deep research" });
+    // ── Research ─────────────────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "Research" });
 
     new Setting(containerEl)
       .setName("Output folder")
@@ -171,8 +153,8 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Retrieval K")
-      .setDesc("How many chunks the synthesiser sees per query.")
+      .setName("Search depth")
+      .setDesc("How many passages the AI considers per question. Higher values improve coverage but take longer.")
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.researchK))
@@ -186,8 +168,8 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Max repair attempts")
-      .setDesc("Bounded retries when citation verification fails (ADR-0013).")
+      .setName("Auto-correction passes")
+      .setDesc("How many times to automatically fix citation issues before accepting the answer. Higher values improve accuracy but take longer.")
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.researchMaxRepairAttempts))
@@ -201,18 +183,15 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Decomposition")
+      .setName("Query expansion")
       .setDesc(
-        "Atomizer override (ADR-0021). 'Auto' lets the judge model decide " +
-          "whether to break the query into focused sub-queries. 'Always' " +
-          "forces decomposition. 'Never' runs a single-pass query " +
-          "(matches v0.2.1 behaviour, skips the Atomizer LLM call).",
+        "Automatic (recommended) lets the AI decide whether to break complex questions into focused sub-questions for more thorough answers. Always forces this. Never disables it for faster single-pass answers.",
       )
       .addDropdown((dd) =>
         dd
-          .addOption("auto", "Auto (Atomizer decides)")
-          .addOption("always", "Always decompose")
-          .addOption("never", "Never decompose")
+          .addOption("auto", "Automatic")
+          .addOption("always", "Always")
+          .addOption("never", "Never")
           .setValue(this.plugin.settings.researchDecompose)
           .onChange(async (value) => {
             this.plugin.settings.researchDecompose =
@@ -222,12 +201,9 @@ export class AiOsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Append debug section to reports")
+      .setName("Show source details in reports")
       .setDesc(
-        "Append a collapsed debug section to each report showing the " +
-          "Atomizer's rationale and the per-Executor retrieval log " +
-          "(block ids, scores, attempts). Useful when investigating why " +
-          "the model cited a particular block.",
+        "Append a detailed source log to each report showing which passages were retrieved and cited. Useful for verifying the AI's reasoning.",
       )
       .addToggle((toggle) =>
         toggle

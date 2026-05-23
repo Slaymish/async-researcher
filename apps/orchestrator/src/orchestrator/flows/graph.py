@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal, TypedDict
 
 from citation import (
     Report,
@@ -125,10 +125,17 @@ def _deps(config: RunnableConfig) -> ResearchDeps:
     return config["configurable"]["deps"]
 
 
+def _maybe_progress(config: RunnableConfig, message: str) -> None:
+    cb: Callable[[str], None] | None = config.get("configurable", {}).get("on_progress")
+    if cb is not None:
+        cb(message)
+
+
 # ── Atomizer node ─────────────────────────────────────────────────────────────
 
 
 async def _atomize(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    _maybe_progress(config, "Analyzing your question…")
     deps = _deps(config)
     override = state.get("decompose_override", "auto")
     if override == "auto":
@@ -157,6 +164,7 @@ def _route_after_atomize(state: ResearchState) -> str | list[Send]:
 
 
 async def _plan(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    _maybe_progress(config, "Planning sub-questions…")
     deps = _deps(config)
     p = await plan_query(state["query"], deps.client, max_sub_queries=state["max_sub_queries"])
     return {"plan": p}
@@ -196,6 +204,9 @@ async def _execute(payload: dict[str, Any], config: RunnableConfig) -> dict[str,
     (`Annotated[list[SubReport], operator.add]`) so concurrent Executors
     don't race.
     """
+    sub_query_text = payload["sub_query"].text
+    preview = sub_query_text[:60] + "…" if len(sub_query_text) > 60 else sub_query_text
+    _maybe_progress(config, f"Researching: {preview}")
     deps = _deps(config)
     sub_report = await execute_sub_query(
         payload["sub_query"],
@@ -214,6 +225,7 @@ async def _execute(payload: dict[str, Any], config: RunnableConfig) -> dict[str,
 
 
 def _aggregate(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    _maybe_progress(config, "Combining results…")
     sub_reports = state.get("sub_reports") or []
     merged_report, merged_chunks = aggregate(
         sub_reports,
@@ -266,6 +278,7 @@ def _route_after_aggregate(state: ResearchState) -> str:
 
 
 async def _verify(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    _maybe_progress(config, "Verifying citations…")
     deps = _deps(config)
     verification = await verify_report(
         state["report"],
@@ -287,6 +300,7 @@ def _route_after_verify(state: ResearchState) -> str:
 
 async def _repair(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
     """One post-merge repair attempt — same body as v0.2.1's `_repair`."""
+    _maybe_progress(config, "Correcting citation issues…")
     deps = _deps(config)
     report = state["report"]
     failures = state["verification"].failures
@@ -308,6 +322,7 @@ async def _repair(state: ResearchState, config: RunnableConfig) -> dict[str, Any
 
 
 def _assemble(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    _maybe_progress(config, "Assembling your report…")
     deps = _deps(config)
     markdown = assemble(state["report"], chunks_for_context(deps.store, state["report"]))
     return {"markdown": markdown}
@@ -366,6 +381,7 @@ async def run_research_graph(
     skip_alignment: bool,
     max_sub_queries: int,
     decompose: Literal["auto"] | bool = "auto",
+    on_progress: Callable[[str], None] | None = None,
 ) -> ResearchState:
     initial: ResearchState = {
         "query": query,
@@ -379,7 +395,7 @@ async def run_research_graph(
     final = await _GRAPH.ainvoke(
         initial,
         config={
-            "configurable": {"deps": deps},
+            "configurable": {"deps": deps, "on_progress": on_progress},
             "max_concurrency": 1,
         },
     )

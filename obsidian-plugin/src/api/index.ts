@@ -101,6 +101,51 @@ export class OrchestratorClient {
     return this.post<ResearchResponse>("/research", req);
   }
 
+  async researchStream(
+    req: ResearchRequest,
+    onProgress: (message: string) => void,
+  ): Promise<ResearchResponse> {
+    const resp = await fetch(this.url("/research/stream"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    if (!resp.ok || !resp.body) {
+      const text = await resp.text().catch(() => "");
+      throw new ApiError(
+        `HTTP ${resp.status}: ${text.slice(0, 300)}`,
+        resp.status,
+        text,
+      );
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const event = JSON.parse(line.slice(6)) as {
+          type: string;
+          message?: string;
+          data?: ResearchResponse;
+        };
+        if (event.type === "progress" && event.message) {
+          onProgress(event.message);
+        } else if (event.type === "result" && event.data) {
+          return event.data;
+        } else if (event.type === "error") {
+          throw new Error(event.message ?? "Research failed");
+        }
+      }
+    }
+    throw new Error("Stream ended without a result");
+  }
+
   private async get<T>(path: string): Promise<T> {
     const resp = await requestUrl({
       url: this.url(path),

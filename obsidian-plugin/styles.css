@@ -112,25 +112,34 @@
   gap: var(--size-4-2);
 }
 
-.ai-os-surfacing__card-source {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-accent);
-  font-family: var(--font-monospace);
+.ai-os-surfacing__card-name {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  flex: 1 1 auto;
+  min-width: 0;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
-.ai-os-surfacing__card-score {
+.ai-os-surfacing__card-kind {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
-  font-family: var(--font-monospace);
-  padding: 0 var(--size-2-2);
   background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
+  padding: 0 var(--size-2-2);
   flex: 0 0 auto;
+  text-transform: capitalize;
+}
+
+.ai-os-surfacing__card-path {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .ai-os-surfacing__card-text {

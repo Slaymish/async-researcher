@@ -32,11 +32,11 @@ export class SurfacingView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "AI OS — related";
+    return "Related notes";
   }
 
   getIcon(): string {
-    return "search";
+    return "brain";
   }
 
   async onOpen(): Promise<void> {
@@ -89,7 +89,7 @@ export class SurfacingView extends ItemView {
     contentEl.addClass("ai-os-surfacing");
 
     const headerEl = contentEl.createDiv({ cls: "ai-os-surfacing__header" });
-    headerEl.createDiv({ cls: "ai-os-surfacing__title", text: "Related" });
+    headerEl.createDiv({ cls: "ai-os-surfacing__title", text: "Related notes" });
     headerEl
       .createEl("button", { cls: "ai-os-surfacing__refresh", text: "Refresh" })
       .addEventListener("click", () => {
@@ -111,7 +111,7 @@ export class SurfacingView extends ItemView {
     const rowEl = parent.createDiv({ cls: "ai-os-surfacing__threshold" });
     rowEl.createSpan({
       cls: "ai-os-surfacing__threshold-label",
-      text: "Min similarity",
+      text: "Relevance threshold",
     });
     const sliderEl = rowEl.createEl("input", {
       cls: "ai-os-surfacing__threshold-slider",
@@ -123,14 +123,15 @@ export class SurfacingView extends ItemView {
         value: String(this.plugin.settings.surfaceMinScore),
       },
     }) as HTMLInputElement;
+    const fmtScore = (v: number) => `${Math.round(v * 100)}%`;
     const valueEl = rowEl.createSpan({
       cls: "ai-os-surfacing__threshold-value",
-      text: this.plugin.settings.surfaceMinScore.toFixed(2),
+      text: fmtScore(this.plugin.settings.surfaceMinScore),
     });
     sliderEl.addEventListener("input", () => {
       const v = Number.parseFloat(sliderEl.value);
       this.plugin.settings.surfaceMinScore = v;
-      valueEl.setText(v.toFixed(2));
+      valueEl.setText(fmtScore(v));
       // Persist in the background; don't block re-render on disk write.
       void this.plugin.saveSettings();
       this.renderBody();
@@ -143,20 +144,20 @@ export class SurfacingView extends ItemView {
     this.statusEl.empty();
 
     const subtitle = this.currentRelpath
-      ? `For: ${this.currentRelpath}`
-      : "Open a note to see related blocks.";
+      ? `For: ${noteBasename(this.currentRelpath)}`
+      : "Open a note to see related content.";
     this.statusEl.createSpan({ text: subtitle });
 
     switch (this.status) {
       case "idle":
         return;
       case "loading":
-        this.bodyEl.createDiv({ cls: "ai-os-surfacing__placeholder", text: "Searching…" });
+        this.bodyEl.createDiv({ cls: "ai-os-surfacing__placeholder", text: "Finding related notes…" });
         return;
       case "empty":
         this.bodyEl.createDiv({
           cls: "ai-os-surfacing__placeholder",
-          text: "No related blocks found.",
+          text: "No related content found.",
         });
         return;
       case "error":
@@ -173,32 +174,42 @@ export class SurfacingView extends ItemView {
     if (hidden > 0) {
       this.statusEl.createSpan({
         cls: "ai-os-surfacing__status-detail",
-        text: ` — showing ${visible.length} of ${this.results.length} (${hidden} below ${minScore.toFixed(2)})`,
+        text: ` — showing ${visible.length} of ${this.results.length} (${hidden} below ${Math.round(minScore * 100)}%)`,
       });
     }
     if (visible.length === 0) {
       this.bodyEl.createDiv({
         cls: "ai-os-surfacing__placeholder",
-        text: `All ${this.results.length} results are below the similarity threshold (${minScore.toFixed(2)}). Lower the slider to show them.`,
+        text: `All ${this.results.length} results are below the relevance threshold. Lower the slider to show them.`,
       });
       return;
     }
 
     for (const chunk of visible) {
       const cardEl = this.bodyEl.createDiv({ cls: "ai-os-surfacing__card" });
+
       const headEl = cardEl.createDiv({ cls: "ai-os-surfacing__card-head" });
       headEl.createSpan({
-        cls: "ai-os-surfacing__card-source",
-        text: `${chunk.relpath} ^${chunk.block_id}`,
+        cls: "ai-os-surfacing__card-name",
+        text: noteBasename(chunk.relpath),
       });
-      headEl.createSpan({
-        cls: "ai-os-surfacing__card-score",
-        text: chunk.score.toFixed(3),
+      if (chunk.kind && chunk.kind !== "paragraph") {
+        headEl.createSpan({
+          cls: "ai-os-surfacing__card-kind",
+          text: chunk.kind.replace("_", " "),
+        });
+      }
+
+      cardEl.createDiv({
+        cls: "ai-os-surfacing__card-path",
+        text: chunk.relpath,
       });
+
       cardEl.createDiv({
         cls: "ai-os-surfacing__card-text",
         text: snippet(chunk.text),
       });
+
       cardEl.addEventListener("click", () => {
         this.openChunk(chunk).catch((e) => {
           new Notice(`Could not open ${chunk.relpath}: ${(e as Error).message}`);
@@ -257,4 +268,9 @@ export function getOpenSurfacingView(plugin: AiOsPlugin): SurfacingView | null {
  */
 export function fileRelpath(file: TFile): string {
   return file.path;
+}
+
+function noteBasename(relpath: string): string {
+  const last = relpath.split("/").pop() ?? relpath;
+  return last.replace(/\.md$/i, "");
 }

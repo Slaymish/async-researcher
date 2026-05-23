@@ -11,7 +11,7 @@ the public interface or any caller.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Callable, Literal
 
 from citation import Report, VerificationReport
 from inference import InferenceClient
@@ -50,6 +50,7 @@ async def research(
     skip_alignment: bool = False,
     decompose: Literal["auto"] | bool = "auto",
     max_sub_queries: int = PLANNER_FANOUT_CAP,
+    on_progress: Callable[[str], None] | None = None,
 ) -> ResearchResult:
     """Deep research: atomize → (plan → fan-out)? → execute → aggregate → verify+repair → assemble.
 
@@ -71,6 +72,7 @@ async def research(
         skip_alignment=skip_alignment,
         max_sub_queries=max_sub_queries,
         decompose=decompose,
+        on_progress=on_progress,
     )
     return ResearchResult(
         query=query,

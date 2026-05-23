@@ -49,9 +49,9 @@ Three processes at runtime: **Obsidian** (host) ↔ **orchestrator** (Python Fas
 
 `apps/orchestrator/src/orchestrator/` layout:
 
-- `routes/` — thin FastAPI routers for `/surface`, `/research`, `/health`. HTTP layer only; no logic.
-- `flows/research_flow.py` — public contract: `research(query, ...) → ResearchResult`. Signature is stable; body delegates to the graph.
-- `flows/graph.py` — LangGraph state machine (v0.2, ADR-0010, ADR-0020). See graph shape below.
+- `routes/` — thin FastAPI routers for `/surface`, `/research`, `/research/stream` (SSE), `/health`. HTTP layer only; no logic.
+- `flows/research_flow.py` — public contract: `research(query, ..., on_progress=None) → ResearchResult`. Signature is stable; body delegates to the graph. `on_progress: Callable[[str], None] | None` is threaded through to each graph node.
+- `flows/graph.py` — LangGraph state machine (v0.2, ADR-0010, ADR-0020). See graph shape below. `_maybe_progress(config, msg)` helper reads `on_progress` from `RunnableConfig.configurable` and is called at the start of each major node.
 - `flows/roma.py` — ROMA node bodies + Pydantic schemas (`AtomizerVerdict`, `Plan`, `SubQuery`, `SubReport`). Graph wiring lives in `graph.py`.
 - `flows/surface_flow.py` — surfacing flow (flat, unchanged since v0.1).
 - `config.py` — `load_config()` reads `config.toml`. Lookup order: walk upward from cwd, then `~/Library/Application Support/ai_os/config.toml`. Override with `AI_OS_CONFIG=<path>`.
@@ -86,11 +86,11 @@ Key behaviours:
 - **Executor** (`execute` node): each runs the full per-Executor `synthesise → repair_loop` cycle before emitting a `SubReport`. Repair budget is per-Executor.
 - **Aggregator** (`aggregate` node): deterministic structural merge — no LLM call. Atomic queries pass through unchanged (v0.2.1 observational invariance preserved).
 - **`PLANNER_FANOUT_CAP = 5`** (first lever to cut if latency exceeds 30s budget).
-- Dependencies (`store`, `client`, `retriever`) are injected via `RunnableConfig.configurable`; they are not serialised state.
+- Dependencies (`store`, `client`, `retriever`) and `on_progress` are injected via `RunnableConfig.configurable`; they are not serialised state.
 
 ### Obsidian plugin (`obsidian-plugin/`)
 
-TypeScript plugin built with esbuild. The only HTTP client — talks to the orchestrator over HTTP/JSON (SSE for streaming).
+TypeScript plugin built with esbuild. The only HTTP client — talks to the orchestrator over HTTP/JSON. Research uses `POST /research/stream` (SSE) via native `fetch` + `ReadableStream`; all other calls use Obsidian's `requestUrl`. The surfacing side panel ("Related notes") shows note basename + kind badge + path subtext per result card; raw similarity scores are hidden from the UI.
 
 Output is `main.js` at the plugin root (gitignored). TypeScript config is `obsidian-plugin/tsconfig.json`.
 

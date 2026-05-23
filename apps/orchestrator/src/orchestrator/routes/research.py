@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..flows.research_flow import ResearchResult, research
@@ -100,6 +103,64 @@ def _serialise(result: ResearchResult) -> dict:
             for sr in result.sub_reports
         ],
     }
+
+
+@router.post("/research/stream")
+async def research_stream_route(req: ResearchRequest, request: Request) -> StreamingResponse:
+    store = getattr(request.app.state, "store", None)
+    client = getattr(request.app.state, "client", None)
+    if store is None or client is None:
+        raise HTTPException(503, "orchestrator not ready")
+    web_adapter = getattr(request.app.state, "web_adapter", None)
+
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    async def run() -> None:
+        try:
+            result = await research(
+                req.query,
+                store=store,
+                client=client,
+                web_adapter=web_adapter,
+                k=req.k,
+                max_repair_attempts=req.max_repair_attempts,
+                skip_alignment=req.skip_alignment,
+                max_sub_queries=req.max_sub_queries,
+                decompose=req.decompose,
+                on_progress=lambda msg: queue.put_nowait({"type": "progress", "message": msg}),
+            )
+            queue.put_nowait({"type": "result", "data": _serialise(result)})
+        except httpx.TimeoutException:
+            queue.put_nowait({
+                "type": "error",
+                "message": "Research timed out — try disabling query expansion or reducing search depth.",
+            })
+        except Exception as e:
+            queue.put_nowait({"type": "error", "message": str(e)})
+        finally:
+            queue.put_nowait(None)
+
+    async def generate():
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _failure(f) -> dict:

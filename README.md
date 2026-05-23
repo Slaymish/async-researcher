@@ -6,7 +6,7 @@ A local-first AI system that turns an Obsidian vault from a passive store of not
 
 **Proactive surfacing** — as you open or edit a note, the plugin pushes related notes, forgotten threads, and connections you wouldn't have made manually into a side panel.
 
-**Deep research on demand** — ask a complex question and the system retrieves relevant vault content, synthesises a long-form report, and verifies every citation against a real `^id` block in your notes. No hallucinated references.
+**Deep research on demand** — ask a complex question and the system retrieves relevant vault content, synthesises a long-form report, and verifies every citation against a real `^id` block in your notes. No hallucinated references. Progress streams live as the local model works.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Three processes at runtime:
 Obsidian plugin  ↔  FastAPI orchestrator (:8765)  ↔  Ollama (:11434)
 ```
 
-- **`obsidian-plugin/`** — TypeScript plugin (esbuild). The only HTTP client. Handles surfacing side panel, deep research modal, and report note writing.
+- **`obsidian-plugin/`** — TypeScript plugin (esbuild). The only HTTP client. Handles surfacing side panel (related notes), deep research modal with live SSE progress, and report note writing.
 - **`apps/orchestrator/`** — Python FastAPI backend. Thin routes; logic lives in `flows/`. Runs the always-on file watcher in-process.
 - **`packages/`** — Python libraries: `ingestion`, `retrieval`, `citation`, `inference`, `memory` (stub), `web` (stub).
 - **`eval/`** — eval harness + datasets for validating retrieval and citation quality.

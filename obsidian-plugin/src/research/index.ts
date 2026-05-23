@@ -53,18 +53,11 @@ export class ResearchQueryModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("ai-os-research-modal");
-    contentEl.createEl("h2", { text: "Deep research" });
-    contentEl.createEl("p", {
-      cls: "ai-os-research-modal__desc",
-      text: "Single-turn retrieve → synth → verify (ADR-0013). The report is written to your vault with [[note#^id]] citations.",
-    });
+    contentEl.createEl("h2", { text: "Research" });
 
     new Setting(contentEl)
       .setName("Question")
-      .setDesc(
-        "What would you like the system to research from your vault? " +
-          "If you've already written a research spec note, load it below.",
-      )
+      .setDesc("What would you like to research across your vault?")
       .addTextArea((text: TextAreaComponent) => {
         this.textArea = text;
         text.setPlaceholder(
@@ -117,9 +110,9 @@ export class ResearchQueryModal extends Modal {
     this.renderSpecSource();
 
     new Setting(contentEl)
-      .setName("Max sub-queries")
+      .setName("Sub-questions")
       .setDesc(
-        "Caps decomposition breadth for this run. Lower values are faster on local models.",
+        "Maximum number of focused sub-questions to research. Lower values are faster.",
       )
       .addSlider((slider) => {
         slider
@@ -134,7 +127,7 @@ export class ResearchQueryModal extends Modal {
     const buttonRow = new Setting(contentEl);
     buttonRow.addButton((btn) => {
       this.submitBtn = btn
-        .setButtonText("Run research")
+        .setButtonText("Start research")
         .setCta()
         .onClick(() => {
           void this.submit();
@@ -153,7 +146,7 @@ export class ResearchQueryModal extends Modal {
     this.statusDetailEl = statusWrap.createDiv({
       cls: "ai-os-research-modal__status-detail",
     });
-    this.setStatus("Idle", "Submit a question to start deep research.");
+    this.setStatus("", "Enter a question to begin.");
   }
 
   private async loadFromNote(file: TFile): Promise<void> {
@@ -209,8 +202,8 @@ export class ResearchQueryModal extends Modal {
     this.busy = true;
     this.submitBtn?.setDisabled(true);
     this.setStatus(
-      "Starting deep research…",
-      "The orchestrator will retrieve context, call the local model, verify citations, and write a report.",
+      "Starting…",
+      "Connecting to your local backend.",
     );
 
     try {
@@ -218,10 +211,10 @@ export class ResearchQueryModal extends Modal {
         specNotePath: this.specNotePath ?? undefined,
         maxSubQueries: this.maxSubQueries,
         onProgress: (message) => {
-          this.setStatus("Deep research running", message);
+          this.setStatus("Researching…", message);
         },
       });
-      this.setStatus("Research complete", "Opening the generated report…");
+      this.setStatus("Done", "Opening your report…");
       this.close();
       if (file) {
         await this.app.workspace.getLeaf(true).openFile(file);
