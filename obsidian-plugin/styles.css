@@ -232,9 +232,9 @@
   color: var(--text-normal);
 }
 
-.ai-os-setup-modal__hint {
-  color: var(--text-muted) !important;
-  font-size: var(--font-ui-smaller) !important;
+.ai-os-setup-modal__step-body .ai-os-setup-modal__hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
   font-style: italic;
 }
 
