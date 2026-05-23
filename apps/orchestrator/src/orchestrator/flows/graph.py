@@ -40,8 +40,8 @@ Heavy dependencies (`store`, `client`, `retriever`) are injected via
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass
-from typing import Annotated, Any, Literal, TypedDict
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 from citation import (
     Report,
@@ -56,6 +56,9 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 from retrieval import DuckDBStore, Retriever, ScoredChunk
+
+if TYPE_CHECKING:
+    from web import WebAdapter
 
 from .roma import (
     AtomizerVerdict,
@@ -115,6 +118,7 @@ class ResearchDeps:
     store: DuckDBStore
     client: InferenceClient
     retriever: Retriever
+    web_adapter: WebAdapter | None = field(default=None)
 
 
 def _deps(config: RunnableConfig) -> ResearchDeps:
@@ -201,6 +205,7 @@ async def _execute(payload: dict[str, Any], config: RunnableConfig) -> dict[str,
         k=payload["k"],
         max_repair_attempts=payload["max_repair_attempts"],
         skip_alignment=payload["skip_alignment"],
+        web_adapter=deps.web_adapter,
     )
     return {"sub_reports": [sub_report]}
 

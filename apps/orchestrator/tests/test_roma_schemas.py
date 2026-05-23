@@ -45,10 +45,15 @@ def test_subquery_defaults_target_to_vault():
     assert sq.target == "vault"
 
 
-def test_subquery_rejects_non_vault_target():
+def test_subquery_accepts_web_target():
+    sq = SubQuery.model_validate({"text": "q", "rationale": "r", "target": "web"})
+    assert sq.target == "web"
+
+
+def test_subquery_rejects_unknown_target():
     with pytest.raises(ValidationError):
         SubQuery.model_validate(
-            {"text": "q", "rationale": "r", "target": "web"}
+            {"text": "q", "rationale": "r", "target": "unknown"}
         )
 
 

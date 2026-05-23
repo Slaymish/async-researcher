@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from inference import InferenceClient, InferenceConfig
 from ingestion import ingest, ingest_file, watch
 from retrieval import DuckDBStore, Retriever
+from web import WebAdapter
 
 from .config import AppConfig, load_config
 from .routes.health import router as health_router
@@ -39,11 +40,16 @@ async def _lifespan(app: FastAPI):
     store = DuckDBStore(
         cfg.storage.duckdb_path,
         cfg.inference.embedding_dim,
-        read_only=True,
     )
     client = InferenceClient(_build_inference_config(cfg))
+    web_adapter = WebAdapter(
+        searxng_url=cfg.web.searxng_url,
+        max_fetch_urls=cfg.web.max_fetch_urls,
+        fetch_timeout_s=cfg.web.fetch_timeout_s,
+    )
     app.state.store = store
     app.state.client = client
+    app.state.web_adapter = web_adapter
     app.state.vault_path = cfg.vault.path
 
     async def _on_change(path: Path) -> None:

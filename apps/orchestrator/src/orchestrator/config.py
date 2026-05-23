@@ -49,12 +49,20 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
+class WebConfig:
+    searxng_url: str | None  # e.g. "http://localhost:8888"; None = DDGS only
+    max_fetch_urls: int  # cap on URLs fetched per sub-query
+    fetch_timeout_s: float
+
+
+@dataclass(frozen=True)
 class AppConfig:
     vault: VaultConfig
     storage: StorageConfig
     inference: InferenceSectionConfig
     watcher: WatcherConfig
     server: ServerConfig
+    web: WebConfig
 
 
 def _expand(p: str | Path, data_dir: Path | None = None) -> Path:
@@ -161,10 +169,18 @@ def load_config(path: Path | None = None) -> AppConfig:
         port=int(server_raw.get("port", 8765)),
     )
 
+    web_raw = raw.get("web", {})
+    web = WebConfig(
+        searxng_url=web_raw.get("searxng_url") or None,
+        max_fetch_urls=int(web_raw.get("max_fetch_urls", 5)),
+        fetch_timeout_s=float(web_raw.get("fetch_timeout_s", 30.0)),
+    )
+
     return AppConfig(
         vault=vault,
         storage=storage,
         inference=inference,
         watcher=watcher,
         server=server,
+        web=web,
     )

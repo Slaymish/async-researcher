@@ -1,11 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(pnpm lint *)",
+      "Bash(uv run *)",
+      "Bash(xargs ls -la)",
+      "Bash(xargs cat)"
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "shadcn"
-  ],
-  "permissions": {
-    "allow": [
-      "Bash(pnpm lint *)"
-    ]
-  }
+  ]
 }

@@ -96,7 +96,8 @@ def setup() -> None:
 
     # Vault path
     print("── Vault ────────────────────────────────────────────")
-    vault_path = _prompt("Absolute path to your Obsidian vault", str(Path.home() / "Documents" / "Vault"))
+    default_vault = str(Path.home() / "Documents" / "Vault")
+    vault_path = _prompt("Absolute path to your Obsidian vault", default_vault)
     vault_path = str(Path(vault_path).expanduser().resolve())
 
     # Models

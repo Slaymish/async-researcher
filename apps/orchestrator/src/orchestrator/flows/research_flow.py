@@ -11,7 +11,7 @@ the public interface or any caller.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from citation import Report, VerificationReport
 from inference import InferenceClient
@@ -19,6 +19,9 @@ from retrieval import DuckDBStore, Retriever
 
 from .graph import ResearchDeps, run_research_graph
 from .roma import PLANNER_FANOUT_CAP, AtomizerVerdict, SubReport
+
+if TYPE_CHECKING:
+    from web import WebAdapter
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ async def research(
     store: DuckDBStore,
     client: InferenceClient,
     retriever: Retriever | None = None,
+    web_adapter: WebAdapter | None = None,
     k: int = 20,
     max_repair_attempts: int = 2,
     skip_alignment: bool = False,
@@ -57,6 +61,7 @@ async def research(
         store=store,
         client=client,
         retriever=retriever or Retriever(store, client),
+        web_adapter=web_adapter,
     )
     final = await run_research_graph(
         query,

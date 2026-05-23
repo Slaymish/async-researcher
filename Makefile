@@ -1,11 +1,11 @@
 .PHONY: install test lint format dev ingest plugin-build plugin-dev clean
 
 install:
-	uv sync
+	uv sync --all-packages
 	pnpm install
 
 test:
-	uv run pytest
+	uv run pytest packages/ apps/ eval/
 	pnpm --filter obsidian-plugin test
 
 lint:

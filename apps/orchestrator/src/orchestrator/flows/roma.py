@@ -12,17 +12,22 @@ is a v0.2.3+ candidate once we have eval data on the flat case.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 import statistics
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from citation import Report, VerificationReport, repair_loop, synthesise
 from citation.schema import Claim, Section
 from inference import InferenceClient, InferenceTask, model_for_task
 from pydantic import BaseModel, ConfigDict, Field
-from retrieval import DuckDBStore, Retriever, ScoredChunk
+from retrieval import Chunk, DuckDBStore, Retriever, ScoredChunk
 
 from ..prompts import build_atomizer_messages, build_planner_messages
+
+if TYPE_CHECKING:
+    from web import WebAdapter
 
 log = logging.getLogger(__name__)
 
@@ -63,12 +68,12 @@ class SubQuery(BaseModel):
         max_length=400,
         description="One sentence: why this sub-query exists in the plan.",
     )
-    target: Literal["vault"] = Field(
+    target: Literal["vault", "web"] = Field(
         default="vault",
         description=(
-            "Where this sub-query will be routed. v0.2.2 = vault only. "
-            "Web routing arrives with deliverable 4-5; the field exists now "
-            "so the schema doesn't break later."
+            "Where this sub-query will be routed. 'vault' = local knowledge base. "
+            "'web' = live search + fetch via SearXNG/DDGS + Crawl4AI (ADR-0018). "
+            "Web chunks are indexed in DuckDB with a web:// prefix (ADR-0019)."
         ),
     )
 
@@ -239,6 +244,82 @@ def aggregate(
     return merged, _dedupe_chunks(ordered)
 
 
+# ── Web chunking helpers (used by the web Executor path) ─────────────────────
+
+_WEB_PREFIX = "web://"
+_HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
+_MIN_CHUNK_CHARS = 100
+_MAX_CHUNK_CHARS = 1400
+_MAX_CHUNKS_PER_DOC = 15
+
+
+def _web_block_id(url: str, idx: int, text: str) -> str:
+    key = f"{url}\x00{idx}\x00{text.strip()}"
+    return "ai-" + hashlib.blake2b(key.encode(), digest_size=6).hexdigest()
+
+
+def _url_to_relpath(url: str) -> str:
+    for scheme in ("https://", "http://"):
+        if url.startswith(scheme):
+            return _WEB_PREFIX + url[len(scheme):]
+    return _WEB_PREFIX + url
+
+
+def _split_web_markdown(content: str) -> list[str]:
+    """Split fetched Markdown into indexable chunks on heading/paragraph boundaries."""
+    boundaries = [m.start() for m in _HEADING_RE.finditer(content)]
+    sections: list[str] = []
+    for i, start in enumerate(boundaries):
+        end = boundaries[i + 1] if i + 1 < len(boundaries) else len(content)
+        sections.append(content[start:end].strip())
+    if not sections:
+        sections = [content.strip()]
+
+    chunks: list[str] = []
+    for section in sections:
+        if len(section) <= _MAX_CHUNK_CHARS:
+            if len(section) >= _MIN_CHUNK_CHARS:
+                chunks.append(section)
+        else:
+            for para in section.split("\n\n"):
+                para = para.strip()
+                if len(para) >= _MIN_CHUNK_CHARS:
+                    chunks.append(para[:_MAX_CHUNK_CHARS])
+        if len(chunks) >= _MAX_CHUNKS_PER_DOC:
+            break
+    return chunks or ([content.strip()[:_MAX_CHUNK_CHARS]] if content.strip() else [])
+
+
+async def _index_web_doc(
+    url: str, content: str, store: DuckDBStore, client: InferenceClient
+) -> list[Chunk]:
+    """Chunk, embed, and upsert a fetched MarkdownDoc into DuckDB. ADR-0019."""
+    if not content.strip():
+        return []
+    texts = _split_web_markdown(content)
+    if not texts:
+        return []
+    embeddings = await client.embed(texts)
+    relpath = _url_to_relpath(url)
+    chunks: list[Chunk] = []
+    line = 0
+    for i, (text, emb) in enumerate(zip(texts, embeddings, strict=False)):
+        line_count = text.count("\n") + 1
+        chunks.append(Chunk(
+            block_id=_web_block_id(url, i, text),
+            relpath=relpath,
+            kind="web-paragraph",
+            text=text,
+            line_start=line,
+            line_end=line + line_count,
+            frontmatter={"url": url},
+            embedding=emb,
+        ))
+        line += line_count
+    store.upsert_chunks(chunks)
+    return chunks
+
+
 # ── Executor ──────────────────────────────────────────────────────────────────
 
 
@@ -251,22 +332,33 @@ async def execute_sub_query(
     k: int,
     max_repair_attempts: int,
     skip_alignment: bool,
+    web_adapter: WebAdapter | None = None,
 ) -> SubReport:
     """Run a focused sub-query through the v0.2.1 spine (minus assemble).
 
-    Per sign-off #2 and #3 each Executor runs the *full* verify+repair cycle
-    against its own retrieved context before emitting a SubReport. Failed
-    sub-Reports still surface (with their `verification.failures` populated)
-    so the Aggregator + post-merge cycle can react. Dropping silently here
-    would hide real signal.
+    For vault sub-queries: retrieve → synth → verify+repair (unchanged).
+    For web sub-queries: search → fetch → index in DuckDB → retrieve → synth → verify+repair.
 
-    The repair budget is per-Executor: a runaway sub-query can't exhaust the
-    budget of its siblings.
+    Per sign-off #2 and #3 each Executor runs the *full* verify+repair cycle
+    before emitting its SubReport. Failed sub-Reports still surface so the
+    Aggregator + post-merge cycle can react.
     """
-    chunks = await retriever.retrieve(sub_query.text, k=k)
+    if sub_query.target == "web":
+        chunks = await _execute_web(
+            sub_query,
+            store=store,
+            client=client,
+            retriever=retriever,
+            k=k,
+            web_adapter=web_adapter,
+        )
+    else:
+        chunks = await retriever.retrieve(sub_query.text, k=k)
+
     scores = [sc.score for sc in chunks]
     log.info(
-        "executor sub_query=%r k=%d retrieved=%d top_score=%.3f mean_score=%.3f",
+        "executor target=%s sub_query=%r k=%d retrieved=%d top_score=%.3f mean_score=%.3f",
+        sub_query.target,
         sub_query.text,
         k,
         len(chunks),
@@ -297,6 +389,48 @@ async def execute_sub_query(
         verification=outcome.verification,
         attempts=outcome.attempts,
     )
+
+
+async def _execute_web(
+    sub_query: SubQuery,
+    *,
+    store: DuckDBStore,
+    client: InferenceClient,
+    retriever: Retriever,
+    k: int,
+    web_adapter: WebAdapter | None,
+) -> list[ScoredChunk]:
+    """Search, fetch, index, then retrieve for a web-targeted sub-query.
+
+    Falls back to vault retrieval if the web adapter is absent or search/fetch
+    yields nothing — ensures the Executor always returns *some* chunks to synth.
+    """
+    if web_adapter is None:
+        log.warning(
+            "sub_query.target='web' but WebAdapter is not configured; "
+            "falling back to vault retrieval for %r",
+            sub_query.text,
+        )
+        return await retriever.retrieve(sub_query.text, k=k)
+
+    hits = await web_adapter.search(sub_query.text, k=web_adapter.max_fetch_urls)
+    log.info("web search %r → %d hits", sub_query.text, len(hits))
+
+    indexed_count = 0
+    for hit in hits:
+        if not hit.url:
+            continue
+        doc = await web_adapter.fetch(hit.url)
+        if not doc.content.strip():
+            log.debug("empty fetch for %s", hit.url)
+            continue
+        new_chunks = await _index_web_doc(hit.url, doc.content, store, client)
+        indexed_count += len(new_chunks)
+
+    log.info("web executor indexed %d chunks for %r", indexed_count, sub_query.text)
+
+    # Retrieve from the now-enriched index (mixed vault + web).
+    return await retriever.retrieve(sub_query.text, k=k)
 
 
 # ── Planner ───────────────────────────────────────────────────────────────────

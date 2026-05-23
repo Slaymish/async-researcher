@@ -43,3 +43,14 @@ ignore_globs = [".obsidian/**", ".trash/**", ".git/**"]
 [server]
 host = "127.0.0.1"
 port = 8765
+
+[web]
+# SearXNG local Docker instance (primary). Omit or leave empty to use DDGS only.
+# Run: docker run -p 8888:8080 searxng/searxng
+# Then enable JSON output in settings.yml under search.formats: [html, json]
+# searxng_url = "http://localhost:8888"
+#
+# How many URLs to fetch per web-targeted sub-query (curl_cffi + Crawl4AI).
+max_fetch_urls = 5
+# Per-URL fetch timeout in seconds.
+fetch_timeout_s = 30

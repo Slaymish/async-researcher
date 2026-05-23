@@ -39,11 +39,13 @@ async def research_route(req: ResearchRequest, request: Request) -> dict:
     client = getattr(request.app.state, "client", None)
     if store is None or client is None:
         raise HTTPException(503, "orchestrator not ready")
+    web_adapter = getattr(request.app.state, "web_adapter", None)
     try:
         result = await research(
             req.query,
             store=store,
             client=client,
+            web_adapter=web_adapter,
             k=req.k,
             max_repair_attempts=req.max_repair_attempts,
             skip_alignment=req.skip_alignment,

@@ -25,8 +25,13 @@ HARD RULES — your output is rejected if any of these are violated:
 4. **One rationale per sub-query.** A single sentence explaining why this
    sub-query is in the plan — what aspect of the user's question it covers.
 
-5. **target = "vault" only.** Web routing exists in a future iteration; for now,
-   every sub-query is answered from the user's local knowledge vault.
+5. **Route each sub-query to "vault" or "web".** Use "vault" for questions
+   answerable from the user's personal knowledge base (their notes, saved
+   research, documents). Use "web" when the vault is unlikely to have the
+   answer — recent events, current public data, external documentation, or
+   anything the user would need to look up online. Bias toward "vault":
+   web routing triggers additional fetching cost; only choose it when vault
+   retrieval would clearly come up empty.
 
 If the user question turns out to be naturally atomic (single topic, single fact,
 no decomposition useful), return exactly ONE sub-query equal to the user question.

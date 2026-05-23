@@ -181,7 +181,16 @@ async def verify_report(
             )
             continue
         json_claim = json_claims_by_key.get(key)
-        if json_claim is not None and parsed_claim.block_id != json_claim.block_id:
+        # Web citations render as [host](url) — the block_id is not embedded in
+        # the assembled Markdown, so parsed_claim.block_id is None by design.
+        # Skip the ID-consistency check for web claims; the quote+alignment
+        # checks below still run via the JSON claim's block_id lookup.
+        is_web_citation = parsed_claim.url is not None
+        if (
+            json_claim is not None
+            and not is_web_citation
+            and parsed_claim.block_id != json_claim.block_id
+        ):
             failures.append(
                 ClaimFailure(
                     kind=FailureKind.BROKEN_LINK,
