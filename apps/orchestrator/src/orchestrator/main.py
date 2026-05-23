@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from inference import InferenceClient, InferenceConfig
 from ingestion import ingest, ingest_file, watch
 from retrieval import DuckDBStore, Retriever
+from memory import Memory, MemoryConfig
 from web import WebAdapter
 
 from .config import AppConfig, load_config
@@ -47,9 +48,24 @@ async def _lifespan(app: FastAPI):
         max_fetch_urls=cfg.web.max_fetch_urls,
         fetch_timeout_s=cfg.web.fetch_timeout_s,
     )
+    if cfg.memory.enabled:
+        mem_cfg = MemoryConfig(
+            data_dir=cfg.storage.data_dir / "mem0",
+            llm_base_url=cfg.inference.base_url,
+            llm_model=cfg.inference.synthesis_model,
+            llm_api_key=cfg.inference.api_key or "ollama",
+            embedder_model=cfg.inference.embedding_model,
+            embedding_dim=cfg.inference.embedding_dim,
+            user_id=cfg.memory.user_id,
+            recall_k=cfg.memory.recall_k,
+        )
+        memory: Memory | None = Memory(mem_cfg)
+    else:
+        memory = None
     app.state.store = store
     app.state.client = client
     app.state.web_adapter = web_adapter
+    app.state.memory = memory
     app.state.vault_path = cfg.vault.path
 
     async def _on_change(path: Path) -> None:
@@ -77,6 +93,8 @@ async def _lifespan(app: FastAPI):
             await watcher_task
         except asyncio.CancelledError:
             pass
+        if memory is not None:
+            await memory.aclose()
         await client.aclose()
         store.close()
 
@@ -122,7 +140,15 @@ def ai_os_cli() -> None:
     sub = parser.add_subparsers(dest="cmd", metavar="<command>")
 
     sub.add_parser("serve", help="Start the orchestrator server (FastAPI + file watcher).")
-    sub.add_parser("setup", help="Interactive first-time setup wizard.")
+    setup_p = sub.add_parser("setup", help="Interactive first-time setup wizard.")
+    setup_p.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Non-interactive: use all defaults, no prompts.",
+    )
+    setup_p.add_argument(
+        "--vault", metavar="PATH", default=None,
+        help="Vault path (required with --yes; otherwise prompted).",
+    )
 
     ingest_p = sub.add_parser("ingest", help="Bulk-ingest the vault into the index.")
     ingest_p.add_argument("--dry-run", action="store_true", help="Parse only; no writes.")
@@ -147,7 +173,7 @@ def ai_os_cli() -> None:
         dev()
     elif args.cmd == "setup":
         from .setup_wizard import setup
-        setup()
+        setup(yes=args.yes, vault=args.vault)
     elif args.cmd == "ingest":
         ingest_cli(args)
     elif args.cmd == "query":

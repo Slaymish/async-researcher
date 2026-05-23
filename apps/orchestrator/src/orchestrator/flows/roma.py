@@ -441,6 +441,7 @@ async def plan(
     client: InferenceClient,
     *,
     max_sub_queries: int = PLANNER_FANOUT_CAP,
+    memory_facts: list[str] | None = None,
 ) -> Plan:
     """Ask the synthesis model to decompose `query` into <= PLANNER_FANOUT_CAP sub-queries.
 
@@ -453,6 +454,7 @@ async def plan(
         max_sub_queries=max_sub_queries,
         planner_fanout_cap=PLANNER_FANOUT_CAP,
         plan_schema=Plan.model_json_schema(),
+        memory_facts=memory_facts,
     )
     planned = await client.complete(messages, response_model=Plan)
     return Plan(sub_queries=planned.sub_queries[:max_sub_queries])

@@ -62,10 +62,13 @@ export class AiOsSettingTab extends PluginSettingTab {
         "Copy this into the [vault] path setting in config.toml when running ai-os setup.",
       )
       .addText((text) => {
-        text.setValue(getVaultPath(this.app)).setDisabled(true);
+        text.setValue(getVaultPath(this.app));
+        text.inputEl.readOnly = true;
         text.inputEl.style.width = "100%";
         text.inputEl.style.fontFamily = "monospace";
         text.inputEl.style.fontSize = "0.85em";
+        text.inputEl.style.cursor = "text";
+        text.inputEl.style.userSelect = "text";
       });
 
     new Setting(containerEl)

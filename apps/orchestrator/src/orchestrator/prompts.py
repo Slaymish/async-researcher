@@ -70,6 +70,7 @@ def build_planner_messages(
     max_sub_queries: int,
     planner_fanout_cap: int,
     plan_schema: dict[str, Any],
+    memory_facts: list[str] | None = None,
 ) -> list[Message]:
     schema = json.dumps(plan_schema, indent=2)
     user = (
@@ -78,6 +79,13 @@ def build_planner_messages(
         "Produce a JSON document matching exactly this schema:\n\n"
         f"```\n{schema}\n```\n"
     )
+    if memory_facts:
+        facts_block = "\n".join(f"- {f}" for f in memory_facts)
+        user = (
+            "KNOWN FACTS FROM MEMORY (pre-context only — do not cite these as "
+            "vault sources; they inform sub-query focus but are not evidence):\n"
+            f"{facts_block}\n\n"
+        ) + user
     return [
         {"role": "system", "content": planner_system(planner_fanout_cap)},
         {"role": "user", "content": user},

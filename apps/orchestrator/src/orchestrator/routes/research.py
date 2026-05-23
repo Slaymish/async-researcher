@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from typing import Literal
 
 import httpx
@@ -43,12 +44,14 @@ async def research_route(req: ResearchRequest, request: Request) -> dict:
     if store is None or client is None:
         raise HTTPException(503, "orchestrator not ready")
     web_adapter = getattr(request.app.state, "web_adapter", None)
+    memory = getattr(request.app.state, "memory", None)
     try:
         result = await research(
             req.query,
             store=store,
             client=client,
             web_adapter=web_adapter,
+            memory=memory,
             k=req.k,
             max_repair_attempts=req.max_repair_attempts,
             skip_alignment=req.skip_alignment,
@@ -112,11 +115,23 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
     if store is None or client is None:
         raise HTTPException(503, "orchestrator not ready")
     web_adapter = getattr(request.app.state, "web_adapter", None)
+    memory = getattr(request.app.state, "memory", None)
 
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
-    # Capture the running loop so the lambda is safe to call from thread-pool
-    # threads (LangGraph runs sync nodes via run_in_executor).
+    # Capture the running loop and its thread so `_on_progress` is safe to call
+    # from LangGraph's thread-pool workers (sync nodes run via run_in_executor)
+    # AND from async code running directly on the loop thread.
     loop = asyncio.get_running_loop()
+    _loop_thread_id = threading.get_ident()
+
+    def _on_progress(msg: str) -> None:
+        item = {"type": "progress", "message": msg}
+        if threading.get_ident() == _loop_thread_id:
+            # Already on the loop thread — put directly so the item is visible
+            # to the next queue.get() without waiting for a loop iteration.
+            queue.put_nowait(item)
+        else:
+            loop.call_soon_threadsafe(queue.put_nowait, item)
 
     async def run() -> None:
         try:
@@ -125,14 +140,13 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
                 store=store,
                 client=client,
                 web_adapter=web_adapter,
+                memory=memory,
                 k=req.k,
                 max_repair_attempts=req.max_repair_attempts,
                 skip_alignment=req.skip_alignment,
                 max_sub_queries=req.max_sub_queries,
                 decompose=req.decompose,
-                on_progress=lambda msg: loop.call_soon_threadsafe(
-                    queue.put_nowait, {"type": "progress", "message": msg}
-                ),
+                on_progress=_on_progress,
             )
             queue.put_nowait({"type": "result", "data": _serialise(result)})
         except httpx.TimeoutException:

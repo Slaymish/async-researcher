@@ -28,22 +28,58 @@ export class SetupModal extends Modal {
     });
 
     const vaultPath = getVaultPath(this.app);
+
+    // ── Quick Start ──────────────────────────────────────────────────────────
+    const qs = contentEl.createDiv({ cls: "ai-os-setup-modal__quickstart" });
+    qs.createEl("h3", { text: "Quick Start" });
+    qs.createEl("p", {
+      text: "Already have Ollama installed? Three steps and you're done.",
+      cls: "ai-os-setup-modal__hint",
+    });
+
+    this.renderQsBlock(
+      qs,
+      "A — Clone & install",
+      [
+        "git clone https://github.com/Slaymish/async-researcher",
+        "cd async-researcher",
+        "uv sync --all-packages",
+      ].join("\n"),
+    );
+
+    this.renderQsBlock(
+      qs,
+      "B — Configure (vault path pre-filled)",
+      `uv run ai-os setup --yes --vault ${JSON.stringify(vaultPath)}`,
+    );
+
+    this.renderQsBlock(
+      qs,
+      "C — Index & run",
+      ["uv run ai-os ingest", "uv run ai-os serve"].join("\n"),
+    );
+
+    contentEl.createEl("hr", { cls: "ai-os-setup-modal__divider" });
+
+    // ── Detailed steps ───────────────────────────────────────────────────────
+    contentEl.createEl("h3", { text: "Step by step" });
+
     this.renderStep(
       contentEl,
       "1",
       "Install Ollama",
       (el) => {
         el.createEl("p", { text: "Download and install Ollama from:" });
-        el.createEl("code", { text: "https://ollama.ai" });
+        this.addCodeBlock(el, "https://ollama.ai");
         el.createEl("p", { text: "Then pull the required models:" });
-        const pre = el.createEl("pre");
-        pre.createEl("code", {
-          text: [
+        this.addCodeBlock(
+          el,
+          [
             "ollama pull nomic-embed-text",
             "ollama pull qwen2.5:7b-instruct",
             "ollama pull qwen2.5:14b-instruct",
           ].join("\n"),
-        });
+        );
         el.createEl("p", {
           text: "The 14b model (~9 GB) is used for synthesis. You can substitute a smaller model and update config.toml accordingly.",
           cls: "ai-os-setup-modal__hint",
@@ -57,17 +93,17 @@ export class SetupModal extends Modal {
       "Install the backend",
       (el) => {
         el.createEl("p", {
-          text: "Clone the repository and install with uv (recommended) or pip:",
+          text: "Clone the repository and install with uv:",
         });
-        const pre = el.createEl("pre");
-        pre.createEl("code", {
-          text: [
+        this.addCodeBlock(
+          el,
+          [
             "git clone https://github.com/Slaymish/async-researcher",
             "cd async-researcher",
             "pip install uv   # skip if uv already installed",
-            "uv sync",
+            "uv sync --all-packages",
           ].join("\n"),
-        });
+        );
       },
     );
 
@@ -76,15 +112,15 @@ export class SetupModal extends Modal {
       "3",
       "Create your config",
       (el) => {
-        el.createEl("p", { text: "Run the interactive setup wizard:" });
-        const pre = el.createEl("pre");
-        pre.createEl("code", { text: "uv run ai-os setup" });
-
-        el.createEl("p", { text: "Your vault is at:" });
-        const pathEl = el.createEl("pre");
-        pathEl.createEl("code", { text: vaultPath, cls: "ai-os-setup-modal__vault-path" });
         el.createEl("p", {
-          text: "The wizard will ask for this path — copy it from above.",
+          text: "Run the setup wizard (your vault path is pre-filled below):",
+        });
+        this.addCodeBlock(
+          el,
+          `uv run ai-os setup --yes --vault ${JSON.stringify(vaultPath)}`,
+        );
+        el.createEl("p", {
+          text: "Or run without --yes for an interactive wizard where you can customise model choices.",
           cls: "ai-os-setup-modal__hint",
         });
       },
@@ -95,8 +131,7 @@ export class SetupModal extends Modal {
       "4",
       "Ingest your vault",
       (el) => {
-        const pre = el.createEl("pre");
-        pre.createEl("code", { text: "uv run ai-os ingest" });
+        this.addCodeBlock(el, "uv run ai-os ingest");
         el.createEl("p", {
           text: "This indexes your notes. May take a few minutes on a large vault.",
           cls: "ai-os-setup-modal__hint",
@@ -109,8 +144,7 @@ export class SetupModal extends Modal {
       "5",
       "Start the backend",
       (el) => {
-        const pre = el.createEl("pre");
-        pre.createEl("code", { text: "uv run ai-os serve" });
+        this.addCodeBlock(el, "uv run ai-os serve");
         el.createEl("p", {
           text: "On macOS, you can add this to Login Items so it starts automatically.",
           cls: "ai-os-setup-modal__hint",
@@ -132,6 +166,28 @@ export class SetupModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+  }
+
+  private addCodeBlock(parent: HTMLElement, text: string): void {
+    const wrapper = parent.createDiv({ cls: "ai-os-setup-modal__code-wrap" });
+    const pre = wrapper.createEl("pre");
+    pre.createEl("code", { text });
+
+    const btn = wrapper.createEl("button", {
+      cls: "ai-os-setup-modal__copy-btn",
+      text: "Copy",
+    });
+    btn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(text);
+      btn.setText("Copied!");
+      setTimeout(() => btn.setText("Copy"), 1500);
+    });
+  }
+
+  private renderQsBlock(parent: HTMLElement, label: string, text: string): void {
+    const block = parent.createDiv({ cls: "ai-os-setup-modal__qs-block" });
+    block.createEl("p", { text: label, cls: "ai-os-setup-modal__qs-label" });
+    this.addCodeBlock(block, text);
   }
 
   private renderStep(

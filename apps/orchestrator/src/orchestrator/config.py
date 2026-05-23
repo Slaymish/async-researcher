@@ -56,6 +56,13 @@ class WebConfig:
 
 
 @dataclass(frozen=True)
+class MemorySectionConfig:
+    enabled: bool   # set to false to skip mem0 entirely
+    recall_k: int   # facts recalled per Planner call
+    user_id: str    # mem0ai user_id namespace
+
+
+@dataclass(frozen=True)
 class AppConfig:
     vault: VaultConfig
     storage: StorageConfig
@@ -63,6 +70,7 @@ class AppConfig:
     watcher: WatcherConfig
     server: ServerConfig
     web: WebConfig
+    memory: MemorySectionConfig
 
 
 def _expand(p: str | Path, data_dir: Path | None = None) -> Path:
@@ -176,6 +184,13 @@ def load_config(path: Path | None = None) -> AppConfig:
         fetch_timeout_s=float(web_raw.get("fetch_timeout_s", 30.0)),
     )
 
+    memory_raw = raw.get("memory", {})
+    memory = MemorySectionConfig(
+        enabled=bool(memory_raw.get("enabled", True)),
+        recall_k=int(memory_raw.get("recall_k", 8)),
+        user_id=str(memory_raw.get("user_id", "default")),
+    )
+
     return AppConfig(
         vault=vault,
         storage=storage,
@@ -183,4 +198,5 @@ def load_config(path: Path | None = None) -> AppConfig:
         watcher=watcher,
         server=server,
         web=web,
+        memory=memory,
     )

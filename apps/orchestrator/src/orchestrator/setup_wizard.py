@@ -86,38 +86,56 @@ def _pick(label: str, options: list[tuple[str, str]], default: str) -> str:
     return raw
 
 
-def setup() -> None:
-    """Interactive setup: writes config.toml to the user config directory."""
+def setup(yes: bool = False, vault: str | None = None) -> None:
+    """Interactive setup: writes config.toml to the user config directory.
+
+    Pass yes=True with a vault path to skip all prompts and use defaults.
+    """
     print()
     print("AI OS Setup Wizard")
     print("==================")
-    print("This creates a config.toml in your user config directory.")
-    print("Press Enter to accept defaults.\n")
+    if yes:
+        print("Using defaults (--yes mode).\n")
+    else:
+        print("This creates a config.toml in your user config directory.")
+        print("Press Enter to accept defaults.\n")
 
     # Vault path
     print("── Vault ────────────────────────────────────────────")
     default_vault = str(Path.home() / "Documents" / "Vault")
-    vault_path = _prompt("Absolute path to your Obsidian vault", default_vault)
-    vault_path = str(Path(vault_path).expanduser().resolve())
+    if yes:
+        vault_path = str(Path(vault or default_vault).expanduser().resolve())
+        print(f"  Vault path: {vault_path}")
+    else:
+        vault_path = _prompt("Absolute path to your Obsidian vault", vault or default_vault)
+        vault_path = str(Path(vault_path).expanduser().resolve())
 
     # Models
     print("\n── Models ───────────────────────────────────────────")
-    print("  (Models are pulled from Ollama. See https://ollama.ai)")
-    synthesis_model = _pick(
-        "Synthesis model (long-form research reports)",
-        _MODELS["synthesis"]["options"],
-        _MODELS["synthesis"]["default"],
-    )
-    embedding_model = _pick(
-        "Embedding model (semantic search)",
-        _MODELS["embedding"]["options"],
-        _MODELS["embedding"]["default"],
-    )
-    judge_model = _pick(
-        "Judge model (citation verification)",
-        _MODELS["judge"]["options"],
-        _MODELS["judge"]["default"],
-    )
+    if yes:
+        synthesis_model = _MODELS["synthesis"]["default"]
+        embedding_model = _MODELS["embedding"]["default"]
+        judge_model = _MODELS["judge"]["default"]
+        print(f"  Synthesis : {synthesis_model}")
+        print(f"  Embedding : {embedding_model}")
+        print(f"  Judge     : {judge_model}")
+    else:
+        print("  (Models are pulled from Ollama. See https://ollama.ai)")
+        synthesis_model = _pick(
+            "Synthesis model (long-form research reports)",
+            _MODELS["synthesis"]["options"],
+            _MODELS["synthesis"]["default"],
+        )
+        embedding_model = _pick(
+            "Embedding model (semantic search)",
+            _MODELS["embedding"]["options"],
+            _MODELS["embedding"]["default"],
+        )
+        judge_model = _pick(
+            "Judge model (citation verification)",
+            _MODELS["judge"]["options"],
+            _MODELS["judge"]["default"],
+        )
 
     # Write config
     cfg_dir = user_config_dir()
@@ -127,10 +145,13 @@ def setup() -> None:
 
     if cfg_path.exists():
         print(f"\n  Config already exists at: {cfg_path}")
-        overwrite = _prompt("Overwrite? (y/n)", "n")
-        if overwrite.lower() not in ("y", "yes"):
-            print("Aborted — existing config unchanged.")
-            sys.exit(0)
+        if yes:
+            print("  Overwriting (--yes).")
+        else:
+            overwrite = _prompt("Overwrite? (y/n)", "n")
+            if overwrite.lower() not in ("y", "yes"):
+                print("Aborted — existing config unchanged.")
+                sys.exit(0)
 
     config_text = _CONFIG_TEMPLATE.format(
         vault_path=vault_path,

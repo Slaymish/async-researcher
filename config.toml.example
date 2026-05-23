@@ -44,6 +44,14 @@ ignore_globs = [".obsidian/**", ".trash/**", ".git/**"]
 host = "127.0.0.1"
 port = 8765
 
+[memory]
+# Cross-session memory via mem0ai (ADR-0022). Set enabled = false to skip entirely.
+enabled = true
+# Facts recalled per Planner call (injected as pre-context before decomposition).
+recall_k = 8
+# mem0ai user_id namespace — change if running multiple users on the same data_dir.
+user_id = "default"
+
 [web]
 # SearXNG local Docker instance (primary). Omit or leave empty to use DDGS only.
 # Run: docker run -p 8888:8080 searxng/searxng

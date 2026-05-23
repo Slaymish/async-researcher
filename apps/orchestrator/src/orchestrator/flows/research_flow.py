@@ -21,6 +21,7 @@ from .graph import ResearchDeps, run_research_graph
 from .roma import PLANNER_FANOUT_CAP, AtomizerVerdict, SubReport
 
 if TYPE_CHECKING:
+    from memory import Memory
     from web import WebAdapter
 
 
@@ -45,6 +46,7 @@ async def research(
     client: InferenceClient,
     retriever: Retriever | None = None,
     web_adapter: WebAdapter | None = None,
+    memory: Memory | None = None,
     k: int = 20,
     max_repair_attempts: int = 2,
     skip_alignment: bool = False,
@@ -63,6 +65,7 @@ async def research(
         client=client,
         retriever=retriever or Retriever(store, client),
         web_adapter=web_adapter,
+        memory=memory,
     )
     final = await run_research_graph(
         query,

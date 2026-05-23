@@ -58,6 +58,7 @@ from langgraph.types import Send
 from retrieval import DuckDBStore, Retriever, ScoredChunk
 
 if TYPE_CHECKING:
+    from memory import Memory
     from web import WebAdapter
 
 from .roma import (
@@ -119,6 +120,7 @@ class ResearchDeps:
     client: InferenceClient
     retriever: Retriever
     web_adapter: WebAdapter | None = field(default=None)
+    memory: Memory | None = field(default=None)
 
 
 def _deps(config: RunnableConfig) -> ResearchDeps:
@@ -166,7 +168,18 @@ def _route_after_atomize(state: ResearchState) -> str | list[Send]:
 async def _plan(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
     _maybe_progress(config, "Planning sub-questions…")
     deps = _deps(config)
-    p = await plan_query(state["query"], deps.client, max_sub_queries=state["max_sub_queries"])
+    memory_facts: list[str] = []
+    if deps.memory is not None:
+        recalled = await deps.memory.recall(state["query"])
+        memory_facts = [f.text for f in recalled]
+        if memory_facts:
+            _maybe_progress(config, f"Recalled {len(memory_facts)} memory facts…")
+    p = await plan_query(
+        state["query"],
+        deps.client,
+        max_sub_queries=state["max_sub_queries"],
+        memory_facts=memory_facts or None,
+    )
     return {"plan": p}
 
 

@@ -233,12 +233,16 @@
   padding: var(--size-4-2) var(--size-4-3);
   overflow-x: auto;
   margin: var(--size-4-2) 0;
+  user-select: text;
+  cursor: text;
 }
 
 .ai-os-setup-modal__step-body code {
   font-family: var(--font-monospace);
   font-size: var(--font-ui-smaller);
   color: var(--text-normal);
+  user-select: text;
+  cursor: text;
 }
 
 .ai-os-setup-modal__step-body .ai-os-setup-modal__hint {
@@ -250,6 +254,71 @@
 .ai-os-setup-modal__vault-path code {
   color: var(--text-accent);
   word-break: break-all;
+}
+
+.ai-os-setup-modal__divider {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: var(--size-4-4) 0;
+}
+
+.ai-os-setup-modal__quickstart {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-3);
+  margin-bottom: var(--size-4-4);
+}
+
+.ai-os-setup-modal__quickstart h3 {
+  margin: 0 0 var(--size-2-2);
+  font-size: var(--font-ui-medium);
+  color: var(--text-normal);
+}
+
+.ai-os-setup-modal__qs-block {
+  margin-top: var(--size-4-2);
+}
+
+.ai-os-setup-modal__qs-label {
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  margin: 0 0 var(--size-2-1) !important;
+}
+
+.ai-os-setup-modal__code-wrap {
+  position: relative;
+}
+
+.ai-os-setup-modal__code-wrap pre {
+  padding-right: 4.5em;
+}
+
+.ai-os-setup-modal__copy-btn {
+  position: absolute;
+  top: var(--size-2-2);
+  right: var(--size-2-2);
+  font-size: var(--font-ui-smaller);
+  padding: 2px var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--interactive-normal);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.ai-os-setup-modal__copy-btn:hover {
+  background: var(--interactive-hover);
+  color: var(--text-normal);
+}
+
+/* Quick-start blocks also need selectable text */
+.ai-os-setup-modal__quickstart pre,
+.ai-os-setup-modal__quickstart code {
+  user-select: text;
+  cursor: text;
 }
 
 .ai-os-setup-modal__footer {
