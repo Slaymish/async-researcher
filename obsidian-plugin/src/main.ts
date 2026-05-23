@@ -297,6 +297,7 @@ export default class AiOsPlugin extends Plugin {
       );
       return file;
     } catch (e) {
+      this.clearResearchStatus();
       notice.hide();
       const msg =
         e instanceof ApiError
@@ -369,13 +370,6 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins === 0) return `${secs}s`;
-  return `${mins}m ${secs.toString().padStart(2, "0")}s`;
-}
 
 function settingToDecompose(
   value: "auto" | "always" | "never",

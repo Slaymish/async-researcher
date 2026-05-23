@@ -196,7 +196,7 @@ export class SurfacingView extends ItemView {
       if (chunk.kind && chunk.kind !== "paragraph") {
         headEl.createSpan({
           cls: "ai-os-surfacing__card-kind",
-          text: chunk.kind.replace("_", " "),
+          text: chunk.kind.replaceAll("_", " "),
         });
       }
 

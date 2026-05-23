@@ -114,6 +114,9 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
     web_adapter = getattr(request.app.state, "web_adapter", None)
 
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
+    # Capture the running loop so the lambda is safe to call from thread-pool
+    # threads (LangGraph runs sync nodes via run_in_executor).
+    loop = asyncio.get_running_loop()
 
     async def run() -> None:
         try:
@@ -127,7 +130,9 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
                 skip_alignment=req.skip_alignment,
                 max_sub_queries=req.max_sub_queries,
                 decompose=req.decompose,
-                on_progress=lambda msg: queue.put_nowait({"type": "progress", "message": msg}),
+                on_progress=lambda msg: loop.call_soon_threadsafe(
+                    queue.put_nowait, {"type": "progress", "message": msg}
+                ),
             )
             queue.put_nowait({"type": "result", "data": _serialise(result)})
         except httpx.TimeoutException:
@@ -151,6 +156,10 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
         finally:
             if not task.done():
                 task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     return StreamingResponse(
         generate(),

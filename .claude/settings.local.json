@@ -4,7 +4,8 @@
       "Bash(pnpm lint *)",
       "Bash(uv run *)",
       "Bash(xargs ls -la)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(python3 *)"
     ]
   },
   "enableAllProjectMcpServers": true,

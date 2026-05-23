@@ -204,12 +204,14 @@ async def _execute(payload: dict[str, Any], config: RunnableConfig) -> dict[str,
     (`Annotated[list[SubReport], operator.add]`) so concurrent Executors
     don't race.
     """
-    sub_query_text = payload["sub_query"].text
+    raw = payload["sub_query"]
+    sub_query: SubQuery = SubQuery.model_validate(raw) if isinstance(raw, dict) else raw
+    sub_query_text = sub_query.text
     preview = sub_query_text[:60] + "…" if len(sub_query_text) > 60 else sub_query_text
     _maybe_progress(config, f"Researching: {preview}")
     deps = _deps(config)
     sub_report = await execute_sub_query(
-        payload["sub_query"],
+        sub_query,
         retriever=deps.retriever,
         store=deps.store,
         client=deps.client,
