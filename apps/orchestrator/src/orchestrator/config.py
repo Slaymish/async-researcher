@@ -73,6 +73,20 @@ _DEFAULT_EMBEDDING_DIMS = {
 }
 
 
+def user_config_dir() -> Path:
+    """Platform-appropriate user config directory for AI OS."""
+    import sys
+
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "ai_os"
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+        return base / "ai-os"
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    return Path(xdg) / "ai-os" if xdg else Path.home() / ".config" / "ai-os"
+
+
 def _config_path() -> Path:
     env = os.environ.get("AI_OS_CONFIG")
     if env:
@@ -83,9 +97,14 @@ def _config_path() -> Path:
         candidate = parent / "config.toml"
         if candidate.is_file():
             return candidate
+    # Fall back to platform-appropriate user config directory.
+    user_cfg = user_config_dir() / "config.toml"
+    if user_cfg.is_file():
+        return user_cfg
     raise FileNotFoundError(
-        "config.toml not found. Copy config.toml.example and set AI_OS_CONFIG, "
-        "or run from repo root."
+        "config.toml not found.\n"
+        "Run `ai-os setup` to create one, or copy config.toml.example and set "
+        "AI_OS_CONFIG to its path."
     )
 
 

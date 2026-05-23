@@ -1,8 +1,18 @@
 [project]
-name = "orchestrator"
-version = "0.0.0"
-description = "FastAPI backend — proactive surfacing + deep research."
+name = "ai-os-orchestrator"
+version = "0.1.0"
+description = "Local-first AI research assistant backend for Obsidian — proactive surfacing and deep research with local LLMs."
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Hamish Burke" }]
+keywords = ["obsidian", "llm", "rag", "local-ai", "knowledge-management"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -17,6 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
+ai-os = "orchestrator.main:ai_os_cli"
 orchestrator-dev = "orchestrator.main:dev"
 orchestrator-ingest = "orchestrator.main:ingest_cli"
 orchestrator-query = "orchestrator.main:query_cli"

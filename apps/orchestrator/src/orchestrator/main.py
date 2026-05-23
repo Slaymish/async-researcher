@@ -85,12 +85,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     return app
 
 
-def dev() -> None:
-    """Entry point for `uv run orchestrator-dev`. Starts FastAPI + file watcher."""
+def _setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+def dev() -> None:
+    """Entry point for `orchestrator-dev` / `ai-os serve`. Starts FastAPI + file watcher."""
+    _setup_logging()
     cfg = load_config()
     uvicorn.run(
         "orchestrator.main:create_app",
@@ -100,6 +104,54 @@ def dev() -> None:
         log_level="info",
         reload=False,
     )
+
+
+def ai_os_cli() -> None:
+    """Entry point for the `ai-os` command. Dispatches subcommands."""
+    _setup_logging()
+    parser = argparse.ArgumentParser(
+        prog="ai-os",
+        description="AI OS — local-first AI assistant backend for Obsidian.",
+    )
+    sub = parser.add_subparsers(dest="cmd", metavar="<command>")
+
+    sub.add_parser("serve", help="Start the orchestrator server (FastAPI + file watcher).")
+    sub.add_parser("setup", help="Interactive first-time setup wizard.")
+
+    ingest_p = sub.add_parser("ingest", help="Bulk-ingest the vault into the index.")
+    ingest_p.add_argument("--dry-run", action="store_true", help="Parse only; no writes.")
+    ingest_p.add_argument("--force", action="store_true", help="Re-process unchanged files.")
+
+    query_p = sub.add_parser("query", help="Query the index (smoke test).")
+    query_p.add_argument("query", help="Natural-language query string.")
+    query_p.add_argument("-k", type=int, default=5, help="Top-k results (default 5).")
+    query_p.add_argument("--prefix", default=None)
+    query_p.add_argument("--kind", action="append",
+                         choices=["heading", "para", "list_item", "code", "table"])
+
+    research_p = sub.add_parser("research", help="Run a single deep research query.")
+    research_p.add_argument("query")
+    research_p.add_argument("-k", type=int, default=20)
+    research_p.add_argument("--repair", type=int, default=2)
+    research_p.add_argument("--skip-alignment", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.cmd == "serve":
+        dev()
+    elif args.cmd == "setup":
+        from .setup_wizard import setup
+        setup()
+    elif args.cmd == "ingest":
+        ingest_cli(args)
+    elif args.cmd == "query":
+        import asyncio
+        raise SystemExit(asyncio.run(_run_query(args)))
+    elif args.cmd == "research":
+        import asyncio
+        raise SystemExit(asyncio.run(_run_research(args)))
+    else:
+        parser.print_help()
 
 
 async def _run_ingest(args: argparse.Namespace) -> int:
@@ -122,16 +174,14 @@ async def _run_ingest(args: argparse.Namespace) -> int:
         store.close()
 
 
-def ingest_cli() -> None:
-    """Entry point for `uv run orchestrator-ingest`. One-shot bulk ingestion."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    parser = argparse.ArgumentParser(prog="orchestrator-ingest")
-    parser.add_argument("--dry-run", action="store_true", help="No file writes, no embedding.")
-    parser.add_argument("--force", action="store_true", help="Re-process unchanged files.")
-    args = parser.parse_args()
+def ingest_cli(args: argparse.Namespace | None = None) -> None:
+    """Entry point for `orchestrator-ingest` / `ai-os ingest`. One-shot bulk ingestion."""
+    _setup_logging()
+    if args is None:
+        parser = argparse.ArgumentParser(prog="orchestrator-ingest")
+        parser.add_argument("--dry-run", action="store_true", help="No file writes, no embedding.")
+        parser.add_argument("--force", action="store_true", help="Re-process unchanged files.")
+        args = parser.parse_args()
     raise SystemExit(asyncio.run(_run_ingest(args)))
 
 
@@ -190,11 +240,8 @@ async def _run_research(args: argparse.Namespace) -> int:
 
 
 def research_cli() -> None:
-    """Entry point for `uv run orchestrator-research`. Single-turn deep research."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    """Entry point for `orchestrator-research`. Single-turn deep research."""
+    _setup_logging()
     parser = argparse.ArgumentParser(prog="orchestrator-research")
     parser.add_argument("query")
     parser.add_argument("-k", type=int, default=20)
@@ -209,7 +256,7 @@ def research_cli() -> None:
 
 
 def query_cli() -> None:
-    """Entry point for `uv run orchestrator-query`. Smoke-test retrieval against live DB."""
+    """Entry point for `orchestrator-query`. Smoke-test retrieval against live DB."""
     logging.basicConfig(level=logging.WARNING)
     parser = argparse.ArgumentParser(prog="orchestrator-query")
     parser.add_argument("query", help="Natural-language query string.")

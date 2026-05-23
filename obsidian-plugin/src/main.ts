@@ -19,6 +19,7 @@ import {
   getOpenSurfacingView,
 } from "./surfacing";
 import { ResearchQueryModal, stripSpecNote, writeReportNote } from "./research";
+import { SetupModal } from "./setup";
 
 interface SurfaceOptions {
   /** Bypass the debounce window — fire immediately. */
@@ -115,6 +116,14 @@ export default class AiOsPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "open-setup-guide",
+      name: "Open backend setup guide",
+      callback: () => {
+        new SetupModal(this.app).open();
+      },
+    });
+
     this.addSettingTab(new AiOsSettingTab(this.app, this));
     this.researchStatusEl = this.addStatusBarItem();
     this.researchStatusEl.hide();
@@ -130,6 +139,10 @@ export default class AiOsPlugin extends Plugin {
         this.onFileMenu(menu, file),
       ),
     );
+
+    // Probe the backend after Obsidian finishes loading. Delay so we don't
+    // block the workspace from opening.
+    window.setTimeout(() => void this.startupHealthCheck(), 4000);
 
     console.log("AI OS plugin loaded.");
   }
@@ -305,6 +318,28 @@ export default class AiOsPlugin extends Plugin {
 
   // ── Health probe ───────────────────────────────────────────────────────────
 
+  private async startupHealthCheck(): Promise<void> {
+    try {
+      await this.api.health();
+    } catch {
+      const n = new Notice(
+        "AI OS: Backend not running — open Settings → AI OS for setup instructions.",
+        0,
+      );
+      // Give the notice a clickable "Setup" button.
+      const btn = n.noticeEl.createEl("button", {
+        text: "Open setup guide",
+        cls: "ai-os-notice-btn",
+      });
+      btn.style.marginTop = "6px";
+      btn.style.display = "block";
+      btn.addEventListener("click", () => {
+        n.hide();
+        new SetupModal(this.app).open();
+      });
+    }
+  }
+
   async checkHealth(): Promise<void> {
     try {
       const h = await this.api.health();
@@ -313,7 +348,17 @@ export default class AiOsPlugin extends Plugin {
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new Notice(`Orchestrator unreachable: ${msg}`);
+      const n = new Notice(`Orchestrator unreachable: ${msg}`, 0);
+      const btn = n.noticeEl.createEl("button", {
+        text: "Open setup guide",
+        cls: "ai-os-notice-btn",
+      });
+      btn.style.marginTop = "6px";
+      btn.style.display = "block";
+      btn.addEventListener("click", () => {
+        n.hide();
+        new SetupModal(this.app).open();
+      });
     }
   }
 

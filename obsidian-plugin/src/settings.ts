@@ -4,6 +4,7 @@
 // ADR-0009). These knobs are HTTP + UX-only.
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type AiOsPlugin from "./main";
+import { SetupModal, getVaultPath } from "./setup";
 
 export interface AiOsSettings {
   /** Orchestrator base URL. v0.1 is localhost-only. */
@@ -62,8 +63,32 @@ export class AiOsSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "Backend" });
 
     new Setting(containerEl)
+      .setName("Setup guide")
+      .setDesc(
+        "First time? The plugin requires a local Python backend. " +
+        "Open the guide for step-by-step installation instructions.",
+      )
+      .addButton((btn) =>
+        btn.setButtonText("Open setup guide").onClick(() => {
+          new SetupModal(this.app).open();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Your vault path")
+      .setDesc(
+        "Copy this into the [vault] path setting in config.toml when running ai-os setup.",
+      )
+      .addText((text) => {
+        text.setValue(getVaultPath(this.app)).setDisabled(true);
+        text.inputEl.style.width = "100%";
+        text.inputEl.style.fontFamily = "monospace";
+        text.inputEl.style.fontSize = "0.85em";
+      });
+
+    new Setting(containerEl)
       .setName("Orchestrator URL")
-      .setDesc("The local FastAPI orchestrator. v0.1 is localhost-only.")
+      .setDesc("The local FastAPI orchestrator. Defaults to localhost:8765.")
       .addText((text) =>
         text
           .setPlaceholder(DEFAULT_SETTINGS.backendUrl)

@@ -1,9 +1,10 @@
 {
   "id": "ai-os",
   "name": "AI OS",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Local-first AI knowledge node — proactive surfacing + deep research.",
-  "author": "Hamish",
+  "description": "Local-first AI assistant — proactive related-note surfacing and deep research, powered by your vault and local LLMs. Requires the AI OS backend (see plugin settings for setup instructions).",
+  "author": "Hamish Burke",
+  "authorUrl": "https://github.com/hamish-hb",
   "isDesktopOnly": true
 }
