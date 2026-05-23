@@ -1,7 +1,7 @@
 {
   "id": "researcher",
   "name": "Async Researcher",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minAppVersion": "1.5.0",
   "description": "Local-first AI assistant — proactive related-note surfacing and deep research, powered by your vault and local LLMs. Requires the AI OS backend (see plugin settings for setup instructions).",
   "author": "Hamish Burke",
