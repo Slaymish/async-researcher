@@ -6,7 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     # Pin minor — major bumps have historically broken the embedder
     # contract upstream. See docs/v0.2.3_MEM0_PLAN.md R5.
-    "mem0ai>=2.0,<2.1",
+    # `[nlp]` adds spaCy so mem0's entity-extraction + BM25 lemmatisation
+    # run locally (CPU, fast) instead of falling back to extra LLM calls.
+    # The `en_core_web_sm` model is auto-downloaded by mem0 on first use.
+    "mem0ai[nlp]>=2.0,<2.1",
+    # fastembed enables qdrant's BM25 keyword index → true hybrid
+    # (semantic + lexical) recall. Wheels exist for macOS arm64 + linux.
+    "fastembed>=0.3.1",
 ]
 
 [build-system]

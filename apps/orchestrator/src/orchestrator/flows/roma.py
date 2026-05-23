@@ -356,8 +356,11 @@ async def execute_sub_query(
         chunks = await retriever.retrieve(sub_query.text, k=k)
 
     scores = [sc.score for sc in chunks]
+    # `score` on Retriever output is cosine similarity vs the query
+    # (see retrieval.hybrid module docstring). RRF is used internally
+    # for ordering only.
     log.info(
-        "executor target=%s sub_query=%r k=%d retrieved=%d top_score=%.3f mean_score=%.3f",
+        "executor target=%s sub_query=%r k=%d retrieved=%d top_cos=%.3f mean_cos=%.3f",
         sub_query.target,
         sub_query.text,
         k,

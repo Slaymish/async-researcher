@@ -10,6 +10,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from inference import InferenceClient, InferenceConfig
 from ingestion import ingest, ingest_file, watch
 from retrieval import DuckDBStore, Retriever
@@ -103,6 +104,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     cfg = config or load_config()
     app = FastAPI(title="AI OS Orchestrator", version="0.0.0", lifespan=_lifespan)
     app.state.config = cfg
+    # Obsidian's renderer uses `app://obsidian.md` (and `capacitor://` on mobile) as the
+    # origin for `fetch`. The orchestrator only ever binds to localhost, so allow all
+    # origins — there is no cross-tenant attack surface here.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health_router)
     app.include_router(research_router)
     app.include_router(surface_router)

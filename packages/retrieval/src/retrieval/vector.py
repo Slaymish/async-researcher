@@ -314,6 +314,22 @@ class DuckDBStore:
             )
         return sorted(scored, key=lambda sc: sc.score, reverse=True)[:k]
 
+    def get_embeddings_by_ids(self, block_ids: list[str]) -> dict[str, list[float] | None]:
+        """Bulk-fetch raw embeddings by block_id. Used by hybrid retrieval to
+        compute cosine similarity for chunks that surfaced via lexical/graph
+        ranking (and thus didn't carry a cosine score through `search()`)."""
+        if not block_ids:
+            return {}
+        placeholders = ", ".join(["?"] * len(block_ids))
+        rows = self._con.execute(
+            f"""
+            SELECT block_id, embedding FROM chunks
+            WHERE block_id IN ({placeholders})
+            """,
+            list(block_ids),
+        ).fetchall()
+        return {r[0]: (list(r[1]) if r[1] is not None else None) for r in rows}
+
     def get_chunks_by_ids(self, block_ids: list[str]) -> dict[str, Chunk]:
         """Bulk-fetch chunks by block_id. Used by the citation verifier (link + quote
         checks need the full chunk text). Returns a dict keyed on block_id; missing

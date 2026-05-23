@@ -11,6 +11,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from retrieval import cosine_to_relevance
 
 from ..flows.research_flow import ResearchResult, research
 from ..flows.roma import PLANNER_FANOUT_CAP
@@ -98,7 +99,8 @@ def _serialise(result: ResearchResult) -> dict:
                     {
                         "block_id": sc.chunk.block_id,
                         "relpath": sc.chunk.relpath,
-                        "score": sc.score,
+                        # 0–1 relevance for display (rescaled cosine).
+                        "score": cosine_to_relevance(sc.score),
                     }
                     for sc in sr.chunks
                 ],

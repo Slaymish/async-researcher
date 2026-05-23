@@ -4,7 +4,7 @@
   "surfacingEnabled": true,
   "surfaceDebounceMs": 800,
   "surfaceTopK": 8,
-  "surfaceMinScore": 0.01,
+  "surfaceMinScore": 0.43,
   "researchK": 20,
   "researchMaxRepairAttempts": 2,
   "researchDecompose": "auto",

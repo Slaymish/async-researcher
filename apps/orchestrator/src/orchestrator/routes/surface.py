@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from retrieval import Retriever
+from retrieval import Retriever, cosine_to_relevance
 
 from ..flows.surface_flow import surface
 
@@ -37,7 +37,10 @@ async def surface_route(req: SurfaceRequest, request: Request) -> dict:
                 "block_id": sc.chunk.block_id,
                 "kind": sc.chunk.kind,
                 "text": sc.chunk.text,
-                "score": sc.score,
+                # `score` is a 0–1 relevance value derived from cosine
+                # similarity (see retrieval.cosine_to_relevance); the
+                # plugin renders it as a percentage.
+                "score": cosine_to_relevance(sc.score),
             }
             for sc in result.results
         ]

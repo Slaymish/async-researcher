@@ -91,7 +91,14 @@ async def test_retrieve_fuses_vector_and_graph_results(tmp_path: Path):
     assert graph.calls == [("hello", 13)]
     # ai-b appears in both rankings, so RRF promotes it above vector-only ai-a.
     assert [s.chunk.block_id for s in out] == ["ai-b", "ai-a", "ai-c"]
-    assert all(s.score > 0 for s in out)
+    # Scores are cosine similarity vs the query, not RRF rank scores:
+    #   ai-a: [1,0,0,0] = identical to query → 1.0
+    #   ai-b: [0,1,0,0] = orthogonal → 0.0
+    #   ai-c: graph-only hit with no embedding in the store → 0.0 fallback
+    by_id = {s.chunk.block_id: s.score for s in out}
+    assert by_id["ai-a"] == pytest.approx(1.0)
+    assert by_id["ai-b"] == pytest.approx(0.0, abs=1e-6)
+    assert by_id["ai-c"] == pytest.approx(0.0)
     store.close()
 
 

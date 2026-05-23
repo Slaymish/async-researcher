@@ -101,9 +101,11 @@ class Memory:
         """
         k = k if k is not None else self.config.recall_k
         client = self._ensure_client()
+        # mem0ai v1.1 requires `filters={'user_id': ...}` for search; the
+        # top-level `user_id=` kwarg is rejected with a frozenset error.
         raw = await client.search(
             query,
-            user_id=self.config.user_id,
+            filters={"user_id": self.config.user_id},
             top_k=k,
         )
         return [_to_fact(item) for item in _extract_results(raw)]

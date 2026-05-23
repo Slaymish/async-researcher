@@ -1,7 +1,7 @@
 {
   "id": "researcher",
   "name": "Lumen",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "minAppVersion": "1.5.0",
   "description": "Your vault's memory and research engine, running locally.",
   "author": "Hamish Burke",
