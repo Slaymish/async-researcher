@@ -1,0 +1,5 @@
+# Optional services for later phases (v0.3+: Redis for n8n; Phase 8: more).
+# v0.1 needs none of this — file kept as a placeholder.
+
+version: "3.9"
+services: {}

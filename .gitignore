@@ -1,41 +1,43 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+.claude/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# Node / TS
+node_modules/
+.pnpm-store/
+dist/
 *.tsbuildinfo
-next-env.d.ts
+
+# Obsidian plugin build output
+obsidian-plugin/main.js
+
+# Local config & secrets (per ADR-0016)
+config.toml
+config.local.toml
+.env
+.env.local
+
+# Local data (per ADR-0017 storage path)
+*.duckdb
+*.duckdb.wal
+
+# Eval snapshots can be large
+eval/harness/snapshots/*
+!eval/harness/snapshots/.gitkeep
+
+# Experiments are throwaway
+experiments/*
+!experiments/.gitkeep
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
+*.pem

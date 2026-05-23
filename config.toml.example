@@ -1,0 +1,45 @@
+# AI OS configuration. Copy to `config.toml` (gitignored) and edit per machine.
+# Per ADR-0016: secrets live in `.env`, not here.
+
+[vault]
+# Absolute path to your Obsidian vault.
+path = "/Users/hamish/Documents/Vault"
+# Subdirectories treated as fleeting-note inboxes (consumed by v0.3 autonomous filing).
+inbox_dirs = ["00_Inbox", "01_Fleeting"]
+
+[storage]
+# macOS Application Support convention. Override per machine if needed.
+data_dir = "~/Library/Application Support/ai_os"
+duckdb_path = "${data_dir}/index.duckdb"
+lightrag_dir = "${data_dir}/lightrag"
+
+[inference]
+# OpenAI-compatible endpoint. Defaults to local Ollama.
+# Phase 7 swaps this to a llama-swap URL — see ADR-0009.
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"  # Ollama ignores this; placeholder for the OpenAI client.
+synthesis_model = "qwen2.5:14b-instruct"
+embedding_model = "nomic-embed-text"
+judge_model = "qwen2.5:7b-instruct"
+# Local synthesis on Mac can exceed a minute for structured JSON responses.
+timeout_s = 300
+
+[retrieval]
+vector_top_k = 20
+graph_depth = 2
+# Reciprocal Rank Fusion for hybrid graph+vector merge.
+hybrid_fusion = "rrf"
+
+[citation]
+# Per ADR-0013: bounded repair loop for failed citations.
+max_repair_attempts = 2
+factual_alignment_threshold = 0.8
+
+[watcher]
+# v0.1 always-on file watcher (ADR-0017).
+debounce_ms = 500
+ignore_globs = [".obsidian/**", ".trash/**", ".git/**"]
+
+[server]
+host = "127.0.0.1"
+port = 8765

@@ -1,0 +1,8 @@
+{"question":"What note explains that WCAG 2.2 provides recommendations for making web content more accessible?","expected_block_ids":["ai-d30b9f5f"]}
+{"question":"Where did I note that TurboQuant tq3 KV cache is not in llama.cpp master yet?","expected_block_ids":["ai-7e5df7c3"]}
+{"question":"Which block mentions RedHatAI Qwen3-32B EAGLE-3 speculator and speedup benchmarks?","expected_block_ids":["ai-dff1a651"]}
+{"question":"Find the note about nodriver abandoning WebDriver and Selenium for Chrome DevTools Protocol.","expected_block_ids":["ai-fdcf69b8"]}
+{"question":"Where did I write about glosses for Te Reo learning among non-fluent users?","expected_block_ids":["ai-0188bd0f"]}
+{"question":"Which block discusses GeoDirectory and Business Directory plugins for WordPress community hubs?","expected_block_ids":["ai-02842e74"]}
+{"question":"Find the API performance testing flowchart with Server-Timing and correlationId.","expected_block_ids":["ai-43d06839"]}
+{"question":"Where is the PowerShell OpenCode automatic setup script requiring an apiKey?","expected_block_ids":["ai-6fa8833e"]}

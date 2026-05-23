@@ -1,0 +1,198 @@
+/* AI OS — surfacing side panel.
+ *
+ * Uses Obsidian's CSS custom properties so the panel inherits the user's
+ * theme (light/dark, accent colour, font stack). Avoid hard-coded colours
+ * — they break in any non-default theme.
+ */
+
+.ai-os-surfacing {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--size-4-3) var(--size-4-3) 0;
+  gap: var(--size-4-2);
+}
+
+.ai-os-surfacing__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.ai-os-surfacing__title {
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.ai-os-surfacing__refresh {
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+}
+
+.ai-os-surfacing__refresh:hover {
+  background: var(--interactive-hover);
+}
+
+.ai-os-surfacing__threshold {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-2-2) 0;
+}
+
+.ai-os-surfacing__threshold-label {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.ai-os-surfacing__threshold-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--interactive-accent);
+  cursor: pointer;
+}
+
+.ai-os-surfacing__threshold-value {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.ai-os-surfacing__status {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.ai-os-surfacing__status-detail {
+  color: var(--text-faint);
+}
+
+.ai-os-surfacing__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  overflow-y: auto;
+  padding-bottom: var(--size-4-3);
+}
+
+.ai-os-surfacing__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  padding: var(--size-4-2) var(--size-4-3);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  transition:
+    background-color 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.ai-os-surfacing__card:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.ai-os-surfacing__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.ai-os-surfacing__card-source {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-os-surfacing__card-score {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  padding: 0 var(--size-2-2);
+  background: var(--background-primary);
+  border-radius: var(--radius-s);
+  flex: 0 0 auto;
+}
+
+.ai-os-surfacing__card-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  line-height: var(--line-height-tight);
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Cap snippet height so a long block doesn't dominate the panel. */
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ai-os-surfacing__placeholder {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  padding: var(--size-4-3);
+  text-align: center;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+.ai-os-surfacing__placeholder--error {
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+
+/* Deep-research modal: spec-note source line shown when a note is loaded. */
+.ai-os-research-modal__spec-source {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  padding: var(--size-2-2) 0;
+}
+
+.ai-os-research-modal__spec-source-label {
+  color: var(--text-faint);
+}
+
+.ai-os-research-modal__spec-source-path {
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+}
+
+.ai-os-research-modal__status {
+  margin-top: var(--size-4-3);
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.ai-os-research-modal__status-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.ai-os-research-modal__status-detail {
+  margin-top: var(--size-2-2);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  line-height: var(--line-height-tight);
+}

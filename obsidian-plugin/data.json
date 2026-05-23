@@ -1,0 +1,12 @@
+{
+  "backendUrl": "http://127.0.0.1:8765",
+  "researchOutputFolder": "Research Reports",
+  "surfacingEnabled": true,
+  "surfaceDebounceMs": 800,
+  "surfaceTopK": 8,
+  "surfaceMinScore": 0.01,
+  "researchK": 20,
+  "researchMaxRepairAttempts": 2,
+  "researchDecompose": "auto",
+  "researchShowDebug": true
+}

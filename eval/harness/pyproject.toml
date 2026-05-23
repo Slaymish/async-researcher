@@ -1,0 +1,27 @@
+[project]
+name = "eval-harness"
+version = "0.0.0"
+description = "End-to-end eval — retrieval precision, citation pass rate. See docs/01_MVP_SCOPE.md."
+requires-python = ">=3.12"
+dependencies = [
+    "ingestion",
+    "retrieval",
+    "citation",
+    "inference",
+]
+
+[project.scripts]
+eval-run = "eval.runner:main"
+
+[tool.uv.sources]
+ingestion = { workspace = true }
+retrieval = { workspace = true }
+citation = { workspace = true }
+inference = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eval"]

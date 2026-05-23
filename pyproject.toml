@@ -1,0 +1,37 @@
+[project]
+name = "ai-os-workspace"
+version = "0.0.0"
+description = "Personal AI OS — workspace root. See docs/ for planning."
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "ruff>=0.7",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/orchestrator",
+    "packages/ingestion",
+    "packages/retrieval",
+    "packages/citation",
+    "packages/inference",
+    "packages/memory",
+    "packages/web",
+    "eval/harness",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "apps", "eval"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
