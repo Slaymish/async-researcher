@@ -70,7 +70,7 @@ class WebAdapter:
         ]
 
     async def _search_ddgs(self, query: str, k: int) -> list[SearchHit]:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         def _sync() -> list[dict]:
             with DDGS() as ddgs:

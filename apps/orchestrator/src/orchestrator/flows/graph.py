@@ -39,9 +39,11 @@ Heavy dependencies (`store`, `client`, `retriever`) are injected via
 
 from __future__ import annotations
 
+import logging
 import operator
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 from citation import (
     Report,
@@ -71,9 +73,9 @@ from .roma import (
     execute_sub_query,
     resolve_decompose,
 )
-from .roma import (
-    plan as plan_query,
-)
+from .roma import plan as plan_query
+
+log = logging.getLogger(__name__)
 
 ATOMIZE = "atomize"
 PLAN = "plan"
@@ -82,6 +84,7 @@ AGGREGATE = "aggregate"
 VERIFY = "verify"
 REPAIR = "repair"
 ASSEMBLE = "assemble"
+REMEMBER = "remember"
 
 
 class ResearchState(TypedDict, total=False):
@@ -113,12 +116,18 @@ class ResearchState(TypedDict, total=False):
     attempts: int
     markdown: str
 
+    # v0.2.3: memory write gate. When False the _remember node skips mem.add.
+    memory_write: bool
+    # v0.2.3: force all sub-query targets to "vault" or "web". "auto" = Planner decides.
+    source_filter: Literal["auto", "vault", "web"]
+
 
 @dataclass(frozen=True)
 class ResearchDeps:
     store: DuckDBStore
     client: InferenceClient
     retriever: Retriever
+    synthesis_client: InferenceClient | None = field(default=None)
     web_adapter: WebAdapter | None = field(default=None)
     memory: Memory | None = field(default=None)
 
@@ -127,10 +136,21 @@ def _deps(config: RunnableConfig) -> ResearchDeps:
     return config["configurable"]["deps"]
 
 
+def _synth_client(deps: ResearchDeps) -> InferenceClient:
+    """Return the synthesis client override if set, otherwise the default client."""
+    return deps.synthesis_client if deps.synthesis_client is not None else deps.client
+
+
 def _maybe_progress(config: RunnableConfig, message: str) -> None:
     cb: Callable[[str], None] | None = config.get("configurable", {}).get("on_progress")
     if cb is not None:
         cb(message)
+
+
+def _emit_event(config: RunnableConfig, event: dict[str, Any]) -> None:
+    cb: Callable[[dict], None] | None = config.get("configurable", {}).get("on_event")
+    if cb is not None:
+        cb(event)
 
 
 # ── Atomizer node ─────────────────────────────────────────────────────────────
@@ -141,7 +161,7 @@ async def _atomize(state: ResearchState, config: RunnableConfig) -> dict[str, An
     deps = _deps(config)
     override = state.get("decompose_override", "auto")
     if override == "auto":
-        verdict = await atomize(state["query"], deps.client)
+        verdict = await atomize(state["query"], _synth_client(deps))
     else:
         # Skip the LLM call entirely when the API caller overrode the decision.
         verdict = None
@@ -153,11 +173,13 @@ def _route_after_atomize(state: ResearchState) -> str | list[Send]:
     """Decompose → Planner. Atomic → single-Send fan-out to Executor."""
     if state["decompose"]:
         return PLAN
-    # Atomic case: skip planner, run one Executor with the original query as
-    # its sub-query. Keeps a uniform downstream pipeline.
+    # Atomic case: skip planner, run one Executor with the original query.
+    sf = state.get("source_filter", "auto")
+    atomic_target = sf if sf != "auto" else "web"
     atomic_sub_query = SubQuery(
         text=state["query"],
         rationale="atomic — Atomizer/override said no decomposition needed",
+        target=atomic_target,
     )
     return [Send(EXECUTE, _executor_payload(state, atomic_sub_query))]
 
@@ -176,10 +198,18 @@ async def _plan(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
             _maybe_progress(config, f"Recalled {len(memory_facts)} memory facts…")
     p = await plan_query(
         state["query"],
-        deps.client,
+        _synth_client(deps),
         max_sub_queries=state["max_sub_queries"],
         memory_facts=memory_facts or None,
+        source_filter=state.get("source_filter", "auto"),
     )
+    _emit_event(config, {
+        "type": "plan",
+        "sub_queries": [
+            {"text": sq.text, "target": sq.target, "rationale": sq.rationale}
+            for sq in p.sub_queries
+        ],
+    })
     return {"plan": p}
 
 
@@ -203,6 +233,7 @@ def _executor_payload(state: ResearchState, sub_query: SubQuery) -> dict[str, An
         "k": state["k"],
         "max_repair_attempts": state["max_repair_attempts"],
         "skip_alignment": state["skip_alignment"],
+        "source_filter": state.get("source_filter", "auto"),
     }
 
 
@@ -219,20 +250,36 @@ async def _execute(payload: dict[str, Any], config: RunnableConfig) -> dict[str,
     """
     raw = payload["sub_query"]
     sub_query: SubQuery = SubQuery.model_validate(raw) if isinstance(raw, dict) else raw
+    # Apply source_filter: override the Planner's target when the user locked a source.
+    sf: str = payload.get("source_filter", "auto")
+    if sf != "auto" and sub_query.target != sf:
+        sub_query = sub_query.model_copy(update={"target": sf})
     sub_query_text = sub_query.text
     preview = sub_query_text[:60] + "…" if len(sub_query_text) > 60 else sub_query_text
     _maybe_progress(config, f"Researching: {preview}")
     deps = _deps(config)
+
+    def _on_evt(evt: dict) -> None:
+        _emit_event(config, evt)
+
     sub_report = await execute_sub_query(
         sub_query,
         retriever=deps.retriever,
         store=deps.store,
         client=deps.client,
+        synthesis_client=deps.synthesis_client,
         k=payload["k"],
         max_repair_attempts=payload["max_repair_attempts"],
         skip_alignment=payload["skip_alignment"],
         web_adapter=deps.web_adapter,
+        on_event=_on_evt,
     )
+    _emit_event(config, {
+        "type": "executor_done",
+        "sub_query": sub_query_text,
+        "target": sub_query.target,
+        "chunks_count": len(sub_report.chunks),
+    })
     return {"sub_reports": [sub_report]}
 
 
@@ -298,7 +345,7 @@ async def _verify(state: ResearchState, config: RunnableConfig) -> dict[str, Any
     verification = await verify_report(
         state["report"],
         deps.store,
-        deps.client,
+        _synth_client(deps),
         skip_alignment=state["skip_alignment"],
     )
     return {"verification": verification}
@@ -324,7 +371,7 @@ async def _repair(state: ResearchState, config: RunnableConfig) -> dict[str, Any
         {"role": "assistant", "content": report.model_dump_json()},
         {"role": "user", "content": _failure_brief(failures)},
     ]
-    new_report = await deps.client.complete(
+    new_report = await _synth_client(deps).complete(
         convo,
         response_model=Report,
         max_repair_attempts=1,  # schema fixup; semantic loop is THIS graph
@@ -341,6 +388,45 @@ def _assemble(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
     deps = _deps(config)
     markdown = assemble(state["report"], chunks_for_context(deps.store, state["report"]))
     return {"markdown": markdown}
+
+
+async def _remember(state: ResearchState, config: RunnableConfig) -> dict[str, Any]:
+    """Persist a summary fact to Mem0 after a successful research run (v0.2.3 step 6)."""
+    deps = _deps(config)
+    if deps.memory is None:
+        return {}
+    if not state.get("memory_write", True):
+        return {}
+    verification = state.get("verification")
+    if verification is None:
+        return {}
+    threshold = deps.memory.config.add_pass_rate_threshold
+    if verification.pass_rate < threshold:
+        log.info(
+            "skipping memory write: pass_rate=%.2f < threshold=%.2f",
+            verification.pass_rate,
+            threshold,
+        )
+        return {}
+    report = state["report"]
+    block_ids = [
+        claim.block_id
+        for section in report.sections
+        for claim in section.claims
+        if claim.block_id
+    ]
+    await deps.memory.add(
+        text=report.summary,
+        metadata={
+            "source": "research_run",
+            "query": state["query"],
+            "decompose": state.get("decompose", False),
+            "block_ids": block_ids,
+            "passed": len(verification.failures) == 0,
+        },
+    )
+    _maybe_progress(config, "Saved to memory.")
+    return {}
 
 
 def _failure_brief(failures: list) -> str:
@@ -372,6 +458,7 @@ def build_research_graph():
     g.add_node(VERIFY, _verify)
     g.add_node(REPAIR, _repair)
     g.add_node(ASSEMBLE, _assemble)
+    g.add_node(REMEMBER, _remember)
 
     g.add_edge(START, ATOMIZE)
     g.add_conditional_edges(ATOMIZE, _route_after_atomize, [PLAN, EXECUTE])
@@ -380,7 +467,8 @@ def build_research_graph():
     g.add_conditional_edges(AGGREGATE, _route_after_aggregate, [VERIFY, ASSEMBLE])
     g.add_conditional_edges(VERIFY, _route_after_verify, {REPAIR: REPAIR, ASSEMBLE: ASSEMBLE})
     g.add_edge(REPAIR, VERIFY)
-    g.add_edge(ASSEMBLE, END)
+    g.add_edge(ASSEMBLE, REMEMBER)
+    g.add_edge(REMEMBER, END)
     return g.compile()
 
 
@@ -396,7 +484,10 @@ async def run_research_graph(
     skip_alignment: bool,
     max_sub_queries: int,
     decompose: Literal["auto"] | bool = "auto",
+    memory_write: bool = True,
+    source_filter: Literal["auto", "vault", "web"] = "auto",
     on_progress: Callable[[str], None] | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> ResearchState:
     initial: ResearchState = {
         "query": query,
@@ -405,12 +496,18 @@ async def run_research_graph(
         "skip_alignment": skip_alignment,
         "max_sub_queries": max_sub_queries,
         "decompose_override": decompose,
+        "memory_write": memory_write,
+        "source_filter": source_filter,
         "sub_reports": [],  # reducer needs a starting list
     }
     final = await _GRAPH.ainvoke(
         initial,
         config={
-            "configurable": {"deps": deps, "on_progress": on_progress},
+            "configurable": {
+                "deps": deps,
+                "on_progress": on_progress,
+                "on_event": on_event,
+            },
             "max_concurrency": 1,
         },
     )

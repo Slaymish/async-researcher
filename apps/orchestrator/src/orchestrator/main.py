@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from inference import InferenceClient, InferenceConfig
 from ingestion import ingest, ingest_file, watch
-from retrieval import DuckDBStore, Retriever
 from memory import Memory, MemoryConfig
+from retrieval import DuckDBStore, Retriever
 from web import WebAdapter
 
 from .config import AppConfig, load_config
@@ -177,6 +177,14 @@ def ai_os_cli() -> None:
     research_p.add_argument("-k", type=int, default=20)
     research_p.add_argument("--repair", type=int, default=2)
     research_p.add_argument("--skip-alignment", action="store_true")
+    research_p.add_argument(
+        "--source-filter", choices=["auto", "vault", "web"], default="auto",
+        help="Force all sub-queries to a specific source (default: auto).",
+    )
+    research_p.add_argument(
+        "--no-memory-write", action="store_true",
+        help="Skip writing the run summary to long-term memory.",
+    )
 
     args = parser.parse_args()
 
@@ -258,14 +266,24 @@ async def _run_research(args: argparse.Namespace) -> int:
     cfg = load_config()
     store = DuckDBStore(cfg.storage.duckdb_path, cfg.inference.embedding_dim)
     client = InferenceClient(_build_inference_config(cfg))
+    web_adapter = WebAdapter(
+        searxng_url=cfg.web.searxng_url,
+        max_fetch_urls=cfg.web.max_fetch_urls,
+        fetch_timeout_s=cfg.web.fetch_timeout_s,
+    )
+    source_filter = getattr(args, "source_filter", "auto")
+    memory_write = not getattr(args, "no_memory_write", False)
     try:
         result = await research(
             args.query,
             store=store,
             client=client,
+            web_adapter=web_adapter,
             k=args.k,
             max_repair_attempts=args.repair,
             skip_alignment=args.skip_alignment,
+            source_filter=source_filter,
+            memory_write=memory_write,
         )
         print(result.markdown)
         print("---")
@@ -293,6 +311,14 @@ def research_cli() -> None:
         "--skip-alignment",
         action="store_true",
         help="Skip the judge-model alignment check (faster; deterministic-only verification).",
+    )
+    parser.add_argument(
+        "--source-filter", choices=["auto", "vault", "web"], default="auto",
+        help="Force all sub-queries to a specific source (default: auto).",
+    )
+    parser.add_argument(
+        "--no-memory-write", action="store_true",
+        help="Skip writing the run summary to long-term memory.",
     )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(_run_research(args)))

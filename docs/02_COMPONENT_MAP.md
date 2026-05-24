@@ -32,7 +32,7 @@ Two rules govern every entry below. They exist because the biggest risk in a res
 
 | Component | Source | Package | v0.1 | Interface |
 |---|---|---|---|---|
-| LangGraph state machine | RAG §"Agentic RAG and the State Machine Orchestrator" | `apps/orchestrator` | in (v0.2.1, per ADR-0020) | Linear graph: `retrieve → synthesise → verify → (repair → verify) → assemble`. `research()` signature unchanged from v0.1. ROMA nodes land additively in v0.2.2 (deliverable 2). |
+| LangGraph state machine | RAG §"Agentic RAG and the State Machine Orchestrator" | `apps/orchestrator` | in (v0.2.3) | Graph: `atomize → (plan →) execute → aggregate → (verify → repair →) assemble → remember → END`. `research()` signature stable since v0.1. |
 | ROMA Atomizer | OS §1.1 | `apps/orchestrator` | in (v0.2.2, per ADR-0021) | LLM call on the judge model returning `AtomizerVerdict`. Bypassed when `/research` caller passes `decompose: true \| false`. |
 | ROMA Planner | OS §1.1 | `apps/orchestrator` | in (v0.2.2, per ADR-0021) | LLM call on the synthesis model returning `Plan{sub_queries}`. Capped at `PLANNER_FANOUT_CAP=5`. Skipped on atomic path. |
 | ROMA Executor | OS §1.1 | `apps/orchestrator` | in (v0.2.2, per ADR-0021) | LangGraph `Send` fan-out. Each invocation: `retrieve → synth → repair_loop`, emits a `SubReport` with per-Executor verification. |
@@ -44,9 +44,9 @@ Two rules govern every entry below. They exist because the biggest risk in a res
 
 | Component | Source | Package | v0.1 | Interface |
 |---|---|---|---|---|
-| Mem0 (Single-Pass ADD-only) | RAG §"The Agentic Memory Layer" | `packages/memory` | deferred → v0.2 | v0.1 has no cross-session memory. v0.2 adds `memory.recall(query) -> list[Fact]` and `memory.add(fact)`. |
-| Tri-signal retrieval (semantic + BM25 + entity) | RAG §"Multi-Signal Retrieval Fusion" | `packages/memory` | deferred → v0.2 | Internal to the memory adapter; not exposed. |
-| Agent-mode initialisation | RAG §"Storage Topologies" | `packages/memory` | deferred → v0.2 | CLI subcommand on the orchestrator. |
+| Mem0 (Single-Pass ADD-only) | RAG §"The Agentic Memory Layer" | `packages/memory` | in (v0.2.3, per ADR-0022) | `Memory.recall(query) -> list[Fact]` injected into Planner pre-context. `Memory.add(summary, metadata)` called by `_remember` node after successful runs. Embedded qdrant, no Docker. |
+| Tri-signal retrieval (semantic + BM25 + entity) | RAG §"Multi-Signal Retrieval Fusion" | `packages/memory` | partial (v0.2.3) — semantic + BM25 via mem0ai defaults; entity-graph deferred v0.2.4. | Internal to the memory adapter. |
+| Agent-mode initialisation | RAG §"Storage Topologies" | `packages/memory` | partial (v0.2.3) — auto-init on first use; `orchestrator-memory init\|list\|wipe` CLI deferred. | Stores materialise lazily on first `recall()` or `add()` call. |
 
 ## Inference
 
@@ -64,13 +64,13 @@ Two rules govern every entry below. They exist because the biggest risk in a res
 
 | Component | Source | Package | v0.1 | Interface |
 |---|---|---|---|---|
-| SearXNG metasearch (primary) | local-web-scraping report §"Metasearch Aggregation" | `packages/web` | deferred → v0.2 | `search(query, k) -> list[SearchHit]`. HTTP to a self-hosted Docker instance; JSON output mode. Per ADR-0018. |
-| DDGS (Python lib, fallback) | local-web-scraping report §"Metasearch Aggregation" | `packages/web` | deferred → v0.2 | Same `search()` interface; used when SearXNG is not configured or returns nothing. Per ADR-0018. |
+| SearXNG metasearch (primary) | local-web-scraping report §"Metasearch Aggregation" | `packages/web` | in (v0.2, optional) — code complete; requires user to run Docker with JSON output mode. | `search(query, k) -> list[SearchHit]`. Falls back to DDGS when not configured. Per ADR-0018. |
+| DDGS (Python lib, fallback) | local-web-scraping report §"Metasearch Aggregation" | `packages/web` | in (v0.2, per ADR-0018) | Same `search()` interface; zero-infrastructure fallback. Package: `ddgs` (renamed from `duckduckgo-search`). |
 | Whoogle (Google-only proxy) | local-web-scraping report §"Metasearch Aggregation" | `packages/web` | deferred → v0.2.x | Tertiary fallback when SearXNG is throttled on Google. Not load-bearing. |
-| Crawl4AI | RAG §"The Autonomous Web Scraping Engine" | `packages/web` | deferred → v0.2 | `fetch(url, schema=None) -> MarkdownDoc`. Async, returns LLM-ready Markdown. Default scraper with `enable_stealth=True`. |
-| Playwright headless browser | RAG §"Asynchronous Execution" | `packages/web` (dep) | deferred → v0.2 | Transitive — Crawl4AI runs on it. |
-| Schema-driven LLM extraction | RAG §"Asynchronous Execution" | `packages/web` | deferred → v0.2 | Internal to the web adapter; passed-through JSON schema. |
-| `curl_cffi` TLS impersonation (fast path) | local-web-scraping report §"Protocol-Level Evasion" | `packages/web` | deferred → v0.2 | Lightweight HTTP fetch with Chrome/Firefox JA3 fingerprint. Tried first; falls back to Crawl4AI on 403/empty body. Selector heuristic lives in `packages/web/fetch.py`. |
+| Crawl4AI | RAG §"The Autonomous Web Scraping Engine" | `packages/web` | in (v0.2) | `fetch(url) -> MarkdownDoc`. `curl_cffi` fast path; Crawl4AI with stealth on 403/empty body. Web chunks indexed in DuckDB under `web://` prefix per ADR-0019. |
+| Playwright headless browser | RAG §"Asynchronous Execution" | `packages/web` (dep) | in (v0.2) | Transitive — Crawl4AI runs on it. |
+| Schema-driven LLM extraction | RAG §"Asynchronous Execution" | `packages/web` | deferred | Not implemented; plain Markdown extraction used instead. |
+| `curl_cffi` TLS impersonation (fast path) | local-web-scraping report §"Protocol-Level Evasion" | `packages/web` | in (v0.2) | Chrome JA3 fingerprint. Tried first; falls back to Crawl4AI on 403/empty body. |
 | `nodriver` (CDP-driven browser) | local-web-scraping report §"Advanced DOM Interaction" | `packages/web` | deferred → "as needed" | Used only when Crawl4AI stealth fails. Direct Chrome DevTools Protocol; bypasses WebDriver detection. |
 | FlareSolverr (Cloudflare bypass) | local-web-scraping report §"Solving Mandatory Challenges" | `infra/` (Docker) | deferred → "as needed" | Reverse proxy that solves Cloudflare interstitials and returns session cookies; cookie-passing strategy avoids paying browser cost on every request. |
 | Tor + Privoxy + `stem` (IP rotation) | local-web-scraping report §"Infinite Local Proxies" | `infra/` | deferred → "as needed" | Free IP rotation via `NEWNYM` signal. Only deployed when a target rate-limits a single residential IP. Out of scope unless a real workload forces it. |
@@ -94,8 +94,8 @@ Two rules govern every entry below. They exist because the biggest risk in a res
 | Obsidian plugin shell | OS §7, RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | in | TypeScript plugin. Talks to backend over localhost HTTP. |
 | Proactive surfacing side panel | (new — from vision) | `apps/obsidian-plugin` | in | Listens to file-open/edit events; calls `/surface` endpoint; renders results. |
 | Deep research query input + report rendering | RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | in | Modal or sidebar input; renders returned report as a new note with backlinks. |
-| HITL visual search-graph (node prune/expand) | RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | deferred → v0.2 | Canvas-based or D3-based; requires the LangGraph orchestrator to produce a real plan to visualise. |
-| Terminal-style execution log | RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | deferred → v0.2 | Streams orchestrator events; meaningless without a multi-step orchestrator. |
+| HITL visual search-graph (node prune/expand) | RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | deferred → v0.2.x | Canvas-based or D3-based; plan DAG exists but UI to prune/expand nodes not yet built. |
+| Terminal-style / research status sidebar | RAG §"Human-in-the-Loop UX" | `apps/obsidian-plugin` | in (v0.2.3) | `ResearchStatusView` SSE sidebar: phase timeline, per-sub-query cards, per-URL fetch progress (web_search / web_fetch / web_fetch_done events). Auto-opens on plugin load. |
 | Obsidian Canvas as shared agent workspace | OS §7.2 | `apps/obsidian-plugin` | deferred → v0.3 | Agent reads/writes `.canvas` JSON files. Requires the agent layer to exist first. |
 | Vault Agent Card (A2A server) | OS §7.3 | `apps/obsidian-plugin` | deferred → phase 8 | Hosts `/.well-known/agent.json`. Useless until external A2A clients exist. |
 | Ingestion file watcher | OS §7.1 (subset) | `apps/orchestrator` | in | Always-on lightweight process re-ingesting changed vault files on save. v0.1 scope is ingestion only. See ADR-0017. |
@@ -153,4 +153,13 @@ Counting only `in` and partial-`in` rows:
 - UI: Obsidian plugin, surfacing panel, deep research query/report
 - Partial: HITL approval on user-note edits (by convention)
 
-That is the entire MVP surface area. Everything else in this map is intentionally absent from v0.1.
+## What landed in v0.2 / v0.2.x, summarised
+
+Beyond v0.1, the following are now `in`:
+
+- Orchestration: LangGraph ROMA decomposition (Atomizer + Planner + Executor fan-out + Aggregator), per ADR-0021
+- Memory: Mem0 cross-session memory (Planner pre-context recall + post-run `_remember` write), per ADR-0022
+- Web: SearXNG (optional Docker) + DDGS fallback search; `curl_cffi` + Crawl4AI fetch; web chunks in shared DuckDB under `web://` prefix; per ADR-0018, ADR-0019
+- Source routing: per-run `source_filter` override, web-first Planner prompt; per ADR-0023
+- UI: research status sidebar with live phase timeline and per-URL fetch progress
+- Partial: agent-mode memory init (auto on first use; `orchestrator-memory` CLI not yet built)

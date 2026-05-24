@@ -10,6 +10,7 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from inference import InferenceClient, InferenceConfig
 from pydantic import BaseModel, Field
 from retrieval import cosine_to_relevance
 
@@ -17,6 +18,16 @@ from ..flows.research_flow import ResearchResult, research
 from ..flows.roma import PLANNER_FANOUT_CAP
 
 router = APIRouter()
+
+
+class ProviderOverride(BaseModel):
+    """Per-request LLM provider override. Only affects synthesis/judge calls;
+    embeddings always use the server's configured provider (ADR-0009)."""
+
+    base_url: str = Field(min_length=1)
+    api_key: str = Field(default="")
+    synthesis_model: str | None = Field(default=None)
+    judge_model: str | None = Field(default=None)
 
 
 class ResearchRequest(BaseModel):
@@ -36,6 +47,45 @@ class ResearchRequest(BaseModel):
             "decide. true/false bypasses the Atomizer LLM call entirely."
         ),
     )
+    # v0.2.3 — sign-off #8. Per-run override on memory write.
+    memory_write: bool = Field(
+        default=True,
+        description="When false, skip writing the run summary to Mem0 even if memory is enabled.",
+    )
+    # Source routing override. "auto" lets the Planner decide per sub-query.
+    source_filter: Literal["auto", "vault", "web"] = Field(
+        default="auto",
+        description=(
+            '"auto" — Planner decides per sub-query. '
+            '"vault" — all sub-queries search vault only. '
+            '"web" — all sub-queries search web only.'
+        ),
+    )
+    # Optional per-request synthesis provider override (plugin-configured provider).
+    provider_override: ProviderOverride | None = Field(default=None)
+
+
+def _make_synthesis_client(
+    override: ProviderOverride,
+    base_client: InferenceClient,
+) -> InferenceClient:
+    """Build a synthesis-only InferenceClient from the plugin's provider override.
+
+    Embedding model/config is inherited from the server's default client so the
+    vault index remains consistent regardless of which synthesis provider is in use.
+    """
+    cfg = base_client.config
+    return InferenceClient(
+        InferenceConfig(
+            base_url=override.base_url.rstrip("/"),
+            api_key=override.api_key,
+            synthesis_model=override.synthesis_model or cfg.synthesis_model,
+            embedding_model=cfg.embedding_model,
+            judge_model=override.judge_model or cfg.judge_model,
+            embed_batch_size=cfg.embed_batch_size,
+            timeout_s=cfg.timeout_s,
+        )
+    )
 
 
 @router.post("/research")
@@ -46,11 +96,16 @@ async def research_route(req: ResearchRequest, request: Request) -> dict:
         raise HTTPException(503, "orchestrator not ready")
     web_adapter = getattr(request.app.state, "web_adapter", None)
     memory = getattr(request.app.state, "memory", None)
+    synthesis_client = (
+        _make_synthesis_client(req.provider_override, client)
+        if req.provider_override else None
+    )
     try:
         result = await research(
             req.query,
             store=store,
             client=client,
+            synthesis_client=synthesis_client,
             web_adapter=web_adapter,
             memory=memory,
             k=req.k,
@@ -58,6 +113,8 @@ async def research_route(req: ResearchRequest, request: Request) -> dict:
             skip_alignment=req.skip_alignment,
             max_sub_queries=req.max_sub_queries,
             decompose=req.decompose,
+            memory_write=req.memory_write,
+            source_filter=req.source_filter,
         )
     except httpx.TimeoutException as e:
         raise HTTPException(
@@ -65,6 +122,9 @@ async def research_route(req: ResearchRequest, request: Request) -> dict:
             "local inference request timed out; try a smaller k, disable decomposition, "
             "or increase [inference].timeout_s in config.toml",
         ) from e
+    finally:
+        if synthesis_client is not None:
+            await synthesis_client.aclose()
     return _serialise(result)
 
 
@@ -118,6 +178,10 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
         raise HTTPException(503, "orchestrator not ready")
     web_adapter = getattr(request.app.state, "web_adapter", None)
     memory = getattr(request.app.state, "memory", None)
+    synthesis_client = (
+        _make_synthesis_client(req.provider_override, client)
+        if req.provider_override else None
+    )
 
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
     # Capture the running loop and its thread so `_on_progress` is safe to call
@@ -126,14 +190,17 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
     loop = asyncio.get_running_loop()
     _loop_thread_id = threading.get_ident()
 
-    def _on_progress(msg: str) -> None:
-        item = {"type": "progress", "message": msg}
+    def _put(item: dict) -> None:
         if threading.get_ident() == _loop_thread_id:
-            # Already on the loop thread — put directly so the item is visible
-            # to the next queue.get() without waiting for a loop iteration.
             queue.put_nowait(item)
         else:
             loop.call_soon_threadsafe(queue.put_nowait, item)
+
+    def _on_progress(msg: str) -> None:
+        _put({"type": "progress", "message": msg})
+
+    def _on_event(evt: dict) -> None:
+        _put(evt)
 
     async def run() -> None:
         try:
@@ -141,6 +208,7 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
                 req.query,
                 store=store,
                 client=client,
+                synthesis_client=synthesis_client,
                 web_adapter=web_adapter,
                 memory=memory,
                 k=req.k,
@@ -148,18 +216,26 @@ async def research_stream_route(req: ResearchRequest, request: Request) -> Strea
                 skip_alignment=req.skip_alignment,
                 max_sub_queries=req.max_sub_queries,
                 decompose=req.decompose,
+                memory_write=req.memory_write,
+                source_filter=req.source_filter,
                 on_progress=_on_progress,
+                on_event=_on_event,
             )
             queue.put_nowait({"type": "result", "data": _serialise(result)})
         except httpx.TimeoutException:
             queue.put_nowait({
                 "type": "error",
-                "message": "Research timed out — try disabling query expansion or reducing search depth.",
+                "message": (
+                    "Research timed out — try disabling query expansion "
+                    "or reducing search depth."
+                ),
             })
         except Exception as e:
             queue.put_nowait({"type": "error", "message": str(e)})
         finally:
             queue.put_nowait(None)
+            if synthesis_client is not None:
+                await synthesis_client.aclose()
 
     async def generate():
         task = asyncio.create_task(run())

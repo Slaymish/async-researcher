@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "SearXNG + DDGS search adapter and curl_cffi + Crawl4AI fetch adapter (ADR-0018)."
 requires-python = ">=3.12"
 dependencies = [
-    "duckduckgo-search>=6.0",
+    "ddgs>=7.0",
     "curl-cffi>=0.7",
     "crawl4ai>=0.4",
     "html2text>=2024.2",

@@ -35,6 +35,13 @@ export interface SurfaceRequest {
   k?: number;
 }
 
+export interface ProviderOverride {
+  base_url: string;
+  api_key?: string;
+  synthesis_model?: string;
+  judge_model?: string;
+}
+
 export interface ResearchRequest {
   query: string;
   k?: number;
@@ -44,7 +51,49 @@ export interface ResearchRequest {
   /** v0.2.2 sign-off #7: Atomizer override. "auto" (default) asks the judge
    *  model; true/false bypasses the Atomizer LLM call entirely. */
   decompose?: "auto" | boolean;
+  /** v0.2.3: when false, skip writing this run's summary to Mem0. */
+  memory_write?: boolean;
+  /** Force all sub-queries to a specific source. "auto" = planner decides. */
+  source_filter?: "auto" | "vault" | "web";
+  /** Optional per-request LLM provider override. Synthesis/judge calls use this
+   *  provider; embeddings always use the server's configured provider. */
+  provider_override?: ProviderOverride;
 }
+
+/** Structured SSE events emitted during a streaming research run. */
+export interface ResearchPlanEvent {
+  type: "plan";
+  sub_queries: Array<{ text: string; target: "vault" | "web"; rationale: string }>;
+}
+export interface ResearchWebSearchEvent {
+  type: "web_search";
+  sub_query: string;
+  hits: Array<{ url: string; title: string }>;
+}
+export interface ResearchWebFetchEvent {
+  type: "web_fetch";
+  sub_query: string;
+  url: string;
+  title: string;
+}
+export interface ResearchWebFetchDoneEvent {
+  type: "web_fetch_done";
+  sub_query: string;
+  url: string;
+  chunks: number;
+}
+export interface ResearchExecutorDoneEvent {
+  type: "executor_done";
+  sub_query: string;
+  target: "vault" | "web";
+  chunks_count: number;
+}
+export type ResearchStructuredEvent =
+  | ResearchPlanEvent
+  | ResearchWebSearchEvent
+  | ResearchWebFetchEvent
+  | ResearchWebFetchDoneEvent
+  | ResearchExecutorDoneEvent;
 
 export interface ResearchFailure {
   kind: string;
@@ -104,6 +153,7 @@ export class OrchestratorClient {
   async researchStream(
     req: ResearchRequest,
     onProgress: (message: string) => void,
+    onEvent?: (event: ResearchStructuredEvent) => void,
   ): Promise<ResearchResponse> {
     const resp = await fetch(this.url("/research/stream"), {
       method: "POST",
@@ -133,6 +183,7 @@ export class OrchestratorClient {
           type: string;
           message?: string;
           data?: ResearchResponse;
+          [k: string]: unknown;
         };
         if (event.type === "progress" && event.message) {
           onProgress(event.message);
@@ -140,6 +191,15 @@ export class OrchestratorClient {
           return event.data;
         } else if (event.type === "error") {
           throw new Error(event.message ?? "Research failed");
+        } else if (
+          onEvent &&
+          (event.type === "plan" ||
+            event.type === "web_search" ||
+            event.type === "web_fetch" ||
+            event.type === "web_fetch_done" ||
+            event.type === "executor_done")
+        ) {
+          onEvent(event as unknown as ResearchStructuredEvent);
         }
       }
     }

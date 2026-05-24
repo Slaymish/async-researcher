@@ -372,3 +372,334 @@
   color: var(--text-muted);
   line-height: var(--line-height-tight);
 }
+
+/* ── Research status sidebar ─────────────────────────────────────────────────
+ *
+ * Modelled after the surfacing panel — same variable set, same card idiom.
+ * The sidebar shows live progress during a deep research run: a phase
+ * timeline at the top, then per-sub-query cards that fill in as executors
+ * complete, and a progress footer pinned to the bottom.
+ */
+
+.ai-os-research-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Empty / idle state */
+.ai-os-rs__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-4-4);
+  text-align: center;
+  padding: var(--size-4-4);
+}
+
+.ai-os-rs__empty-text {
+  color: var(--text-faint);
+  font-size: var(--font-ui-small);
+}
+
+.ai-os-rs__new-research-btn {
+  font-size: var(--font-ui-small);
+}
+
+/* ── Header (query) ── */
+
+.ai-os-rs__header {
+  flex: 0 0 auto;
+  padding: var(--size-4-2) var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.ai-os-rs__section-label {
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--size-2-2);
+}
+
+.ai-os-rs__query {
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  line-height: var(--line-height-tight);
+  font-style: italic;
+}
+
+/* ── Phase timeline ── */
+
+.ai-os-rs__steps {
+  flex: 0 0 auto;
+  padding: var(--size-4-2) var(--size-4-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+}
+
+.ai-os-rs__step {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: 3px 0;
+}
+
+.ai-os-rs__step-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.ai-os-rs__step-check {
+  color: var(--color-green);
+  font-size: 12px;
+  font-weight: var(--font-bold);
+  line-height: 1;
+}
+
+.ai-os-rs__step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
+}
+
+.ai-os-rs__step-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  animation: ai-os-spin 0.75s linear infinite;
+}
+
+@keyframes ai-os-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-os-rs__step-label {
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+  line-height: 1;
+}
+
+.ai-os-rs__step.is-done .ai-os-rs__step-label {
+  color: var(--text-muted);
+}
+
+.ai-os-rs__step.is-active .ai-os-rs__step-label {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+/* ── Sub-query cards ── */
+
+.ai-os-rs__subqueries {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--size-2-2) var(--size-4-2) var(--size-4-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-3);
+}
+
+.ai-os-rs__sq {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2) var(--size-4-2);
+  background: var(--background-secondary);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ai-os-rs__sq.is-active {
+  border-color: var(--interactive-accent);
+  background: var(--background-primary);
+}
+
+.ai-os-rs__sq.is-done {
+  opacity: 0.6;
+}
+
+.ai-os-rs__sq-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  margin-bottom: var(--size-2-2);
+}
+
+/* WEB / VAULT badges */
+.ai-os-rs__badge {
+  font-size: 9px;
+  font-weight: var(--font-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  flex: 0 0 auto;
+}
+
+.ai-os-rs__badge--web {
+  background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+  color: var(--interactive-accent);
+}
+
+.ai-os-rs__badge--vault {
+  background: color-mix(in srgb, var(--color-green) 15%, transparent);
+  color: var(--color-green);
+}
+
+.ai-os-rs__sq-status-icon {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.ai-os-rs__sq-mini-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  animation: ai-os-spin 0.75s linear infinite;
+}
+
+.ai-os-rs__sq-check {
+  color: var(--color-green);
+  font-size: 11px;
+  font-weight: var(--font-bold);
+}
+
+.ai-os-rs__sq-text {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-normal);
+  line-height: var(--line-height-tight);
+}
+
+/* Per-URL fetch rows inside a web sub-query card */
+.ai-os-rs__sq-fetches {
+  margin-top: var(--size-2-3);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ai-os-rs__sq-fetch {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  overflow: hidden;
+  opacity: 0.5;
+}
+
+.ai-os-rs__sq-fetch.is-fetching,
+.ai-os-rs__sq-fetch.is-done {
+  opacity: 1;
+}
+
+.ai-os-rs__sq-fetch-icon {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-os-rs__sq-fetch-check {
+  color: var(--color-green);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ai-os-rs__sq-fetch-domain {
+  font-family: var(--font-monospace);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-os-rs__sq-fetch.is-fetching .ai-os-rs__sq-fetch-domain {
+  color: var(--text-normal);
+}
+
+.ai-os-rs__sq-fetch-chunks {
+  flex: 0 0 auto;
+  font-size: 9px;
+  color: var(--text-faint);
+  background: var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 0 4px;
+  line-height: 14px;
+}
+
+.ai-os-rs__sq-chunks {
+  margin-top: var(--size-2-2);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* ── Footer ── */
+
+.ai-os-rs__footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--background-modifier-border);
+  padding: var(--size-2-3) var(--size-4-3);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-os-rs__done-banner {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--background-modifier-border);
+  padding: var(--size-2-3) var(--size-4-3);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+  color: var(--color-green);
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+
+.ai-os-rs__error {
+  flex: 0 0 auto;
+  margin: var(--size-2-3) var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--color-red) 10%, transparent);
+  color: var(--color-red);
+  font-size: var(--font-ui-smaller);
+  line-height: var(--line-height-tight);
+}
+
+/* ── Provider settings ───────────────────────────────────────────────────── */
+
+.ai-os-provider-note {
+  margin: var(--size-2-2) 0 var(--size-4-2);
+  color: var(--text-muted);
+}
+
+.ai-os-api-key-link {
+  color: var(--link-color);
+  text-decoration: underline;
+}

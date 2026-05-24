@@ -16,6 +16,7 @@ import hashlib
 import logging
 import re
 import statistics
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
 from citation import Report, VerificationReport, repair_loop, synthesise
@@ -329,20 +330,26 @@ async def execute_sub_query(
     retriever: Retriever,
     store: DuckDBStore,
     client: InferenceClient,
+    synthesis_client: InferenceClient | None = None,
     k: int,
     max_repair_attempts: int,
     skip_alignment: bool,
     web_adapter: WebAdapter | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> SubReport:
     """Run a focused sub-query through the v0.2.1 spine (minus assemble).
 
     For vault sub-queries: retrieve → synth → verify+repair (unchanged).
     For web sub-queries: search → fetch → index in DuckDB → retrieve → synth → verify+repair.
 
+    `client` is always used for embeddings. `synthesis_client` (if provided) is
+    used for synthesis/repair LLM calls; otherwise falls back to `client`.
+
     Per sign-off #2 and #3 each Executor runs the *full* verify+repair cycle
     before emitting its SubReport. Failed sub-Reports still surface so the
     Aggregator + post-merge cycle can react.
     """
+    synth = synthesis_client if synthesis_client is not None else client
     if sub_query.target == "web":
         chunks = await _execute_web(
             sub_query,
@@ -351,6 +358,7 @@ async def execute_sub_query(
             retriever=retriever,
             k=k,
             web_adapter=web_adapter,
+            on_event=on_event,
         )
     else:
         chunks = await retriever.retrieve(sub_query.text, k=k)
@@ -368,13 +376,13 @@ async def execute_sub_query(
         scores[0] if scores else 0.0,
         statistics.fmean(scores) if scores else 0.0,
     )
-    initial = await synthesise(sub_query.text, chunks, client)
+    initial = await synthesise(sub_query.text, chunks, synth)
     outcome = await repair_loop(
         initial,
         sub_query.text,
         chunks,
         store,
-        client,
+        synth,
         max_repair_attempts=max_repair_attempts,
         skip_alignment=skip_alignment,
     )
@@ -402,6 +410,7 @@ async def _execute_web(
     retriever: Retriever,
     k: int,
     web_adapter: WebAdapter | None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> list[ScoredChunk]:
     """Search, fetch, index, then retrieve for a web-targeted sub-query.
 
@@ -418,17 +427,44 @@ async def _execute_web(
 
     hits = await web_adapter.search(sub_query.text, k=web_adapter.max_fetch_urls)
     log.info("web search %r → %d hits", sub_query.text, len(hits))
+    if on_event and hits:
+        on_event({
+            "type": "web_search",
+            "sub_query": sub_query.text,
+            "hits": [{"url": h.url, "title": h.title} for h in hits[:8]],
+        })
 
     indexed_count = 0
     for hit in hits:
         if not hit.url:
             continue
+        if on_event:
+            on_event({
+                "type": "web_fetch",
+                "sub_query": sub_query.text,
+                "url": hit.url,
+                "title": hit.title,
+            })
         doc = await web_adapter.fetch(hit.url)
         if not doc.content.strip():
             log.debug("empty fetch for %s", hit.url)
+            if on_event:
+                on_event({
+                    "type": "web_fetch_done",
+                    "sub_query": sub_query.text,
+                    "url": hit.url,
+                    "chunks": 0,
+                })
             continue
         new_chunks = await _index_web_doc(hit.url, doc.content, store, client)
         indexed_count += len(new_chunks)
+        if on_event:
+            on_event({
+                "type": "web_fetch_done",
+                "sub_query": sub_query.text,
+                "url": hit.url,
+                "chunks": len(new_chunks),
+            })
 
     log.info("web executor indexed %d chunks for %r", indexed_count, sub_query.text)
 
@@ -445,6 +481,7 @@ async def plan(
     *,
     max_sub_queries: int = PLANNER_FANOUT_CAP,
     memory_facts: list[str] | None = None,
+    source_filter: str = "auto",
 ) -> Plan:
     """Ask the synthesis model to decompose `query` into <= PLANNER_FANOUT_CAP sub-queries.
 
@@ -458,6 +495,7 @@ async def plan(
         planner_fanout_cap=PLANNER_FANOUT_CAP,
         plan_schema=Plan.model_json_schema(),
         memory_facts=memory_facts,
+        source_filter=source_filter,
     )
     planned = await client.complete(messages, response_model=Plan)
     return Plan(sub_queries=planned.sub_queries[:max_sub_queries])

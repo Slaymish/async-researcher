@@ -8,5 +8,11 @@
   "researchK": 20,
   "researchMaxRepairAttempts": 2,
   "researchDecompose": "auto",
-  "researchShowDebug": true
+  "researchShowDebug": true,
+  "researchSidebarOpen": true,
+  "provider": "ollama",
+  "providerApiKey": "",
+  "providerBaseUrl": "",
+  "synthesisModel": "",
+  "judgeModel": ""
 }

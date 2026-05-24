@@ -10,8 +10,9 @@ the public interface or any caller.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING, Literal
 
 from citation import Report, VerificationReport
 from inference import InferenceClient
@@ -44,6 +45,7 @@ async def research(
     *,
     store: DuckDBStore,
     client: InferenceClient,
+    synthesis_client: InferenceClient | None = None,
     retriever: Retriever | None = None,
     web_adapter: WebAdapter | None = None,
     memory: Memory | None = None,
@@ -52,7 +54,10 @@ async def research(
     skip_alignment: bool = False,
     decompose: Literal["auto"] | bool = "auto",
     max_sub_queries: int = PLANNER_FANOUT_CAP,
+    memory_write: bool = True,
+    source_filter: Literal["auto", "vault", "web"] = "auto",
     on_progress: Callable[[str], None] | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> ResearchResult:
     """Deep research: atomize → (plan → fan-out)? → execute → aggregate → verify+repair → assemble.
 
@@ -63,6 +68,7 @@ async def research(
     deps = ResearchDeps(
         store=store,
         client=client,
+        synthesis_client=synthesis_client,
         retriever=retriever or Retriever(store, client),
         web_adapter=web_adapter,
         memory=memory,
@@ -75,7 +81,10 @@ async def research(
         skip_alignment=skip_alignment,
         max_sub_queries=max_sub_queries,
         decompose=decompose,
+        memory_write=memory_write,
+        source_filter=source_filter,
         on_progress=on_progress,
+        on_event=on_event,
     )
     return ResearchResult(
         query=query,

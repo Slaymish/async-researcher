@@ -29,6 +29,9 @@ export interface ResearchModalOptions {
 export class ResearchQueryModal extends Modal {
   private query = "";
   private maxSubQueries = 5;
+  private useVault = true;
+  private useWeb = true;
+  private memoryWrite = true;
   private specNotePath: string | null;
   private specSourceEl: HTMLElement | null = null;
   private textArea: TextAreaComponent | null = null;
@@ -124,6 +127,38 @@ export class ResearchQueryModal extends Modal {
           });
       });
 
+    // ── Sources ──
+    new Setting(contentEl).setName("Sources").setHeading();
+
+    new Setting(contentEl)
+      .setName("Vault notes")
+      .setDesc("Search your personal knowledge base.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.useVault).onChange((value) => {
+          this.useVault = value;
+          this.updateSubmitState();
+        });
+      });
+
+    new Setting(contentEl)
+      .setName("Web search")
+      .setDesc("Fetch articles and research from the internet.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.useWeb).onChange((value) => {
+          this.useWeb = value;
+          this.updateSubmitState();
+        });
+      });
+
+    new Setting(contentEl)
+      .setName("Save to memory")
+      .setDesc("Store a summary of this run in long-term memory to inform future research.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.memoryWrite).onChange((value) => {
+          this.memoryWrite = value;
+        });
+      });
+
     const buttonRow = new Setting(contentEl);
     buttonRow.addButton((btn) => {
       this.submitBtn = btn
@@ -210,6 +245,8 @@ export class ResearchQueryModal extends Modal {
       const file = await this.plugin.runDeepResearch(query, {
         specNotePath: this.specNotePath ?? undefined,
         maxSubQueries: this.maxSubQueries,
+        memoryWrite: this.memoryWrite,
+        sourceFilter: this.sourceFilter(),
         onProgress: (message) => {
           this.setStatus("Researching…", message);
         },
@@ -224,6 +261,22 @@ export class ResearchQueryModal extends Modal {
       this.busy = false;
       this.submitBtn?.setDisabled(false);
     }
+  }
+
+  private updateSubmitState(): void {
+    const neitherSelected = !this.useVault && !this.useWeb;
+    this.submitBtn?.setDisabled(neitherSelected || this.busy);
+    this.setStatus(
+      neitherSelected ? "No sources selected" : "",
+      neitherSelected ? "Enable at least one source to start research." : "",
+    );
+  }
+
+  private sourceFilter(): "auto" | "vault" | "web" {
+    if (this.useVault && this.useWeb) return "auto";
+    if (this.useVault) return "vault";
+    if (this.useWeb) return "web";
+    return "vault"; // fallback — submit is disabled in this state
   }
 
   private setStatus(title: string, detail = ""): void {

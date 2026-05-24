@@ -8,31 +8,29 @@ from retrieval import ScoredChunk
 from .schema import report_json_schema
 
 SYNTHESIS_SYSTEM = """\
-You are a research synthesis agent operating on a private knowledge vault. You will
-be given a USER QUERY and a list of CONTEXT CHUNKS retrieved from the vault.
+You are a research synthesis agent. You will be given a USER QUERY, CONTEXT CHUNKS,
+and a list of VALID BLOCK IDS at the end of the user message.
 
-Your task: produce a faithful, well-organised report that answers the query, citing
-every claim back to a specific context chunk.
+Your task: produce a faithful, well-organised JSON report that answers the query,
+grounding every claim in a specific context chunk.
 
 HARD RULES — your output is rejected if any of these are violated:
 
-1. **Every claim cites exactly one block_id.** The `block_id` MUST be one of the
-   ids in the supplied context — never invent a new one. If no chunk supports the
-   claim you want to make, drop the claim.
+1. **`block_id` must be copied verbatim from VALID BLOCK IDS.** The only allowed
+   values are exactly the ids listed at the end of the user message. Do not invent,
+   shorten, or modify any id. If no listed id supports a claim, drop the claim.
 
-2. **`quote` is verbatim.** The `quote` field on each claim MUST be a literal
-   substring of the cited chunk's text. Whitespace differences are tolerated; word
-   changes are not. Copy-paste from the source.
+2. **`quote` is a verbatim excerpt.** Copy a short phrase EXACTLY from the chunk's
+   text — character for character. Do not paraphrase. Shorter is better; pick the
+   most relevant few words if the chunk is long.
 
-3. **`text` is your sentence.** The `text` field is the natural-language claim you
-   want in the final report. It paraphrases or summarises the quote — it is NOT a
-   copy of the quote.
+3. **`text` is your own sentence.** Paraphrase or summarise the quote in plain
+   language. It is NOT a copy of the quote.
 
-4. **Sections are coherent.** Group related claims under each section heading; one
-   sentence per claim.
+4. **Sections are coherent.** Group related claims under headings; one sentence per
+   claim. Prefer depth: 3 well-grounded claims beat 10 dubious ones.
 
-5. **`summary` is uncited prose.** A short paragraph orienting the reader. Do not
-   put claims in the summary.
+5. **`summary` is uncited prose.** A short orienting paragraph. No claims here.
 
 6. **JSON only.** No markdown fences, no prose preamble, no trailing notes.
 """
@@ -61,12 +59,14 @@ def format_context(chunks: list[ScoredChunk]) -> str:
 
 def build_synthesis_messages(query: str, chunks: list[ScoredChunk]) -> list[Message]:
     schema_json = json.dumps(report_json_schema(), indent=2)
+    valid_ids = " | ".join(f"`{sc.chunk.block_id}`" for sc in chunks)
     user_content = (
         f"USER QUERY: {query}\n\n"
         f"CONTEXT CHUNKS ({len(chunks)} items, ordered by relevance):\n\n"
         f"{format_context(chunks)}\n\n"
         "Produce a JSON document matching exactly this schema:\n\n"
-        f"```\n{schema_json}\n```\n"
+        f"```\n{schema_json}\n```\n\n"
+        f"VALID BLOCK IDS (copy exactly — no other values allowed):\n{valid_ids}\n"
     )
     return [
         {"role": "system", "content": SYNTHESIS_SYSTEM},

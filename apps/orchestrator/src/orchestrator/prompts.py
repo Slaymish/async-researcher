@@ -25,13 +25,12 @@ HARD RULES — your output is rejected if any of these are violated:
 4. **One rationale per sub-query.** A single sentence explaining why this
    sub-query is in the plan — what aspect of the user's question it covers.
 
-5. **Route each sub-query to "vault" or "web".** Use "vault" for questions
-   answerable from the user's personal knowledge base (their notes, saved
-   research, documents). Use "web" when the vault is unlikely to have the
-   answer — recent events, current public data, external documentation, or
-   anything the user would need to look up online. Bias toward "vault":
-   web routing triggers additional fetching cost; only choose it when vault
-   retrieval would clearly come up empty.
+5. **Route each sub-query to "vault" or "web".** Use "web" for external
+   knowledge — research papers, current events, technical documentation,
+   factual questions, anything the user would look up online. Use "vault"
+   only when the question is specifically about the user's own notes,
+   personal analysis, or content they've explicitly saved. When in doubt,
+   prefer "web": the vault is a personal supplement, not an encyclopaedia.
 
 If the user question turns out to be naturally atomic (single topic, single fact,
 no decomposition useful), return exactly ONE sub-query equal to the user question.
@@ -60,8 +59,22 @@ Output JSON only. No prose, no markdown fences.
 """
 
 
-def planner_system(planner_fanout_cap: int) -> str:
-    return PLANNER_SYSTEM_TEMPLATE.format(planner_fanout_cap=planner_fanout_cap)
+def planner_system(
+    planner_fanout_cap: int,
+    source_filter: str = "auto",
+) -> str:
+    base = PLANNER_SYSTEM_TEMPLATE.format(planner_fanout_cap=planner_fanout_cap)
+    if source_filter == "vault":
+        base += (
+            '\n\nSOURCE OVERRIDE: The user has disabled web search for this run. '
+            'Set target="vault" on EVERY sub-query. Do not use "web".'
+        )
+    elif source_filter == "web":
+        base += (
+            '\n\nSOURCE OVERRIDE: The user has disabled vault search for this run. '
+            'Set target="web" on EVERY sub-query. Do not use "vault".'
+        )
+    return base
 
 
 def build_planner_messages(
@@ -71,6 +84,7 @@ def build_planner_messages(
     planner_fanout_cap: int,
     plan_schema: dict[str, Any],
     memory_facts: list[str] | None = None,
+    source_filter: str = "auto",
 ) -> list[Message]:
     schema = json.dumps(plan_schema, indent=2)
     user = (
@@ -87,7 +101,7 @@ def build_planner_messages(
             f"{facts_block}\n\n"
         ) + user
     return [
-        {"role": "system", "content": planner_system(planner_fanout_cap)},
+        {"role": "system", "content": planner_system(planner_fanout_cap, source_filter)},
         {"role": "user", "content": user},
     ]
 

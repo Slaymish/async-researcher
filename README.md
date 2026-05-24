@@ -83,3 +83,7 @@ All architectural reasoning lives in `docs/`:
 | `docs/05_DECISIONS.md`         | ADR log                                   |
 
 Source specs (`ArchitectureSpecification.md`, `LocalAgenticRAGArch.md`) at the repo root are the north star — not a literal build list.
+
+## Contributing
+
+Bug reports, feature requests, and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and dev setup details.

@@ -318,6 +318,61 @@ The `/research` API gains `decompose: Literal["auto"] | bool = "auto"` (default 
 
 ---
 
+## ADR-0022 — Mem0 as the cross-session memory layer (v0.2.3)
+Date: 2026-05-17
+Status: accepted
+
+**Context.** Every research run starts cold: the orchestrator has no knowledge of prior queries, verified facts, or the user's evolving research interests. The roadmap (v0.2 deliverable 3) and component map called for a Mem0 integration. The implementation was designed in `docs/v0.2.3_MEM0_PLAN.md` and signed off in full before coding began.
+
+**Decision.** Integrate `mem0ai` SDK (v2.0.x, embedded qdrant, no Docker) as the memory layer with the following locked choices from sign-off:
+
+- **Injection point: Planner only.** `_plan()` calls `mem.recall(query, k=8)` and prepends a MEMORY block to the Planner prompt. The Atomizer and Executors do not see memory — mixing memory facts with retrieval chunks in the Executor's synthesis context would distort the "cite from chunks" contract (ADR-0013).
+- **Fact-add: summary-level, once per run.** After a successful run, `_remember` (a new terminal graph node wired `assemble → remember → END`) writes `report.summary` to Mem0 with metadata. Pass-rate threshold: 0.5 (looser than the default 0.8 — user chose faster accumulation over noise avoidance). Failed runs are not written.
+- **ADR-0009 deviation (known, controlled).** Mem0ai makes its own LLM calls for fact extraction — they go through mem0ai's internal OpenAI client, not through `packages/inference/client.py`. This is accepted because: (a) the endpoint is the same local Ollama URL so ADR-0005 (local-only) is preserved; (b) flipping the Ollama URL to llama-swap in Phase 7 only requires updating `OPENAI_BASE_URL` env — one config knob covers both consumers. The deviation is documented here so a future "all LLM calls through our adapter" pass knows where to look.
+- **Telemetry off.** `MEM0_TELEMETRY=False` set via `os.environ.setdefault` at `packages/memory/__init__.py` import time, before mem0ai is imported. Belt-and-suspenders with mem0ai's own `telemetry: false` config key.
+- **Per-run override.** Plugin modal carries a "Save to memory" toggle (default ON) forwarded as `memory_write: bool` on the `/research` API. `_remember` skips when `memory_write=False`.
+- **Storage.** Embedded qdrant at `<data_dir>/mem0/qdrant/`, SQLite history at `<data_dir>/mem0/history.db` — same `data_dir` as `index.duckdb` so backup/migration treats them as one unit.
+- **Public surface.** `packages/memory` exposes `Memory`, `MemoryConfig`, `Fact` — no mem0ai types leak into callers. Swap-friendly.
+
+**Alternatives.**
+- *Roll our own memory store* (rejected — tri-signal retrieval, dedup, and history management are non-trivial; mem0ai solves them).
+- *Inject memory into Executor context* (rejected — see injection-point rationale above; also multiplies LLM context cost by N executors).
+- *Per-claim fact-add* (rejected — produces dozens of micro-facts per run, overwhelms recall scoring; summary-level is the right grain for "what have I researched?").
+- *Qdrant Docker / managed mode* (rejected — ADR-0005; embedded mode has no infrastructure cost and is sufficient for single-user load).
+- *Route mem0ai LLM calls through our InferenceClient via a LiteLLM shim* (deferred — high maintenance cost; the practical benefit is a unified audit log, which is not a v0.2.3 concern).
+
+**Consequences.**
+- The `_remember` node adds tail latency to every research run (one LLM call inside mem0ai for fact extraction, one embed call). Mitigation: the node runs after the user-visible `assemble` step, so it does not block report delivery; progress message "Saved to memory." confirms completion.
+- CLI (`orchestrator-memory init|list|wipe`) planned in sign-off #9 but not yet implemented. Memory still works without it; init is automatic on first use, wipe requires deleting `<data_dir>/mem0/` manually until the CLI lands.
+- Entity-graph (third leg of mem0's tri-signal) deferred to v0.2.4+ — the current config gives semantic + BM25 retrieval only.
+
+---
+
+## ADR-0023 — Source routing: web-first Planner prompt and per-run `source_filter` override
+Date: 2026-05-24
+Status: accepted
+
+**Context.** After the web adapter (ADR-0018, ADR-0019) and ROMA (ADR-0021) landed, web search was still not being used in practice. Root cause: the Planner system prompt contained an explicit instruction — "Bias toward vault: web routing triggers additional fetching cost; only choose it when vault retrieval would clearly come up empty." With local small models, this instruction was taken literally and vault was chosen almost universally. Users also had no way to force one source or the other per-run without changing config.
+
+**Decision.** Two changes, applied together:
+
+1. **Planner prompt rewritten to web-first.** Rule 5 of the Planner system prompt now reads: *"Use 'web' for external knowledge — research papers, current events, technical documentation, factual questions, anything the user would look up online. Use 'vault' only when the question is specifically about the user's own notes, personal analysis, or content they've explicitly saved. When in doubt, prefer 'web'."*
+
+2. **`source_filter` per-run override.** A new parameter `source_filter: Literal["auto", "vault", "web"]` (default `"auto"`) is threaded through the entire stack: `ResearchRequest` → `ResearchState` → `_plan()` (appends a `SOURCE OVERRIDE` instruction to the Planner prompt) → `_execute()` (overwrites `sub_query.target` for each Executor) → `_route_after_atomize()` (sets `target` on the atomic-path SubQuery). `"auto"` means the Planner decides per sub-query. `"vault"` or `"web"` forces every sub-query to that target regardless of what the Planner chose. The plugin modal exposes this as "Vault notes" and "Web search" toggles; both on = `"auto"`, one on = that source, neither = submit disabled.
+
+**Alternatives.**
+- *Planner-only routing with better prompt* (rejected — local models follow coarse instructions more reliably than nuanced ones; a per-run override is a more reliable forcing function than prompt engineering alone).
+- *Config-level toggle* (rejected — no per-run granularity; the user may want vault for personal note queries and web for factual research within the same session).
+- *Separate `/research/vault` and `/research/web` endpoints* (rejected — unnecessary API surface; the existing endpoint with `source_filter` covers the same semantics without route proliferation).
+- *Block-level source annotation in retrieval results* (deferred — would let the model see which source each chunk came from and self-route; useful for mixed `"auto"` queries but adds complexity not justified at this stage).
+
+**Consequences.**
+- Vault-targeted queries now require explicit `source_filter="vault"` or a vault-only toggle in the plugin. Users who only ever want vault results should set this as their default.
+- The `source_filter` field is a new required threading concern: any new graph node that dispatches sub-queries must read `state.get("source_filter", "auto")` and apply it.
+- The Planner prompt change cannot be toggled off at runtime; it is a global default. If daily use shows the web-first default is wrong for a user's workflow, a future `planner_bias` config knob can reintroduce the preference.
+
+---
+
 ## How to add a new ADR
 
 1. Use the next number in sequence. Never reuse a number, even for a superseded one.

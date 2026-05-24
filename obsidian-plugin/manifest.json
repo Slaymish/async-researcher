@@ -1,10 +1,10 @@
 {
   "id": "researcher",
   "name": "Lumen - AI Brain",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "minAppVersion": "1.5.0",
   "description": "Your vault's memory and research engine, running locally.",
   "author": "Hamish Burke",
-  "authorUrl": "https://github.com/Slaymish",
+  "authorUrl": "https://github.com/Slaymish/Lumen",
   "isDesktopOnly": true
 }

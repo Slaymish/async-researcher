@@ -9,8 +9,8 @@ import {
   TAbstractFile,
   TFile,
 } from "obsidian";
-import { AiOsSettings, AiOsSettingTab, DEFAULT_SETTINGS } from "./settings";
-import { ApiError, OrchestratorClient } from "./api";
+import { AiOsSettings, AiOsSettingTab, DEFAULT_SETTINGS, PROVIDER_META } from "./settings";
+import { ApiError, OrchestratorClient, ProviderOverride } from "./api";
 import {
   SurfacingView,
   VIEW_TYPE_SURFACING,
@@ -19,6 +19,12 @@ import {
   getOpenSurfacingView,
 } from "./surfacing";
 import { ResearchQueryModal, stripSpecNote, writeReportNote } from "./research";
+import {
+  ResearchStatusView,
+  VIEW_TYPE_RESEARCH,
+  activateResearchView,
+  getResearchView,
+} from "./research/sidebar";
 import { SetupModal } from "./setup";
 
 interface SurfaceOptions {
@@ -29,6 +35,8 @@ interface SurfaceOptions {
 interface ResearchRunOptions {
   specNotePath?: string;
   maxSubQueries?: number;
+  memoryWrite?: boolean;
+  sourceFilter?: "auto" | "vault" | "web";
   onProgress?: (message: string) => void;
 }
 
@@ -49,6 +57,11 @@ export default class AiOsPlugin extends Plugin {
     this.registerView(
       VIEW_TYPE_SURFACING,
       (leaf) => new SurfacingView(leaf, this),
+    );
+
+    this.registerView(
+      VIEW_TYPE_RESEARCH,
+      (leaf) => new ResearchStatusView(leaf, this),
     );
 
     this.addRibbonIcon("brain", "Open related notes", () => {
@@ -73,6 +86,16 @@ export default class AiOsPlugin extends Plugin {
           return;
         }
         this.requestSurface(active.file, { force: true });
+      },
+    });
+
+    this.addCommand({
+      id: "open-research-status",
+      name: "Open research status",
+      callback: () => {
+        this.settings.researchSidebarOpen = true;
+        void this.saveSettings();
+        void activateResearchView(this);
       },
     });
 
@@ -140,11 +163,30 @@ export default class AiOsPlugin extends Plugin {
       ),
     );
 
+    this.app.workspace.onLayoutReady(() => {
+      void this.initResearchLeaf();
+    });
+
     // Probe the backend after Obsidian finishes loading. Delay so we don't
     // block the workspace from opening.
     window.setTimeout(() => void this.startupHealthCheck(), 4000);
 
     console.log("AI OS plugin loaded.");
+  }
+
+  openResearchModal(): void {
+    new ResearchQueryModal(this.app, this).open();
+  }
+
+  onResearchSidebarClose(): void {
+    this.settings.researchSidebarOpen = false;
+    void this.saveSettings();
+  }
+
+  private async initResearchLeaf(): Promise<void> {
+    if (!this.settings.researchSidebarOpen) return;
+    if (this.app.workspace.getLeavesOfType(VIEW_TYPE_RESEARCH).length > 0) return;
+    await activateResearchView(this);
   }
 
   private onFileMenu(menu: Menu, file: TAbstractFile): void {
@@ -269,11 +311,56 @@ export default class AiOsPlugin extends Plugin {
     options: ResearchRunOptions = {},
   ): Promise<TFile | null> {
     const notice = new Notice(`Researching: ${truncate(query, 80)}…`, 0);
+
+    // Open the status sidebar before starting so the user can see progress.
+    if (!this.settings.researchSidebarOpen) {
+      this.settings.researchSidebarOpen = true;
+      void this.saveSettings();
+    }
+    const sidebar = await activateResearchView(this);
+    sidebar?.startResearch(query);
+
     const onProgress = (message: string) => {
       options.onProgress?.(message);
       this.setResearchStatus(message);
       notice.setMessage(message);
+      sidebar?.onProgress(message);
     };
+
+    const onEvent = (evt: { type: string; [k: string]: unknown }) => {
+      if (evt.type === "plan") {
+        const subQueries = evt.sub_queries as Array<{
+          text: string;
+          target: "vault" | "web";
+          rationale: string;
+        }>;
+        sidebar?.onPlan(subQueries);
+      } else if (evt.type === "web_search") {
+        sidebar?.onWebSearch(
+          evt.sub_query as string,
+          (evt.hits as Array<{ url: string; title: string }>) ?? [],
+        );
+      } else if (evt.type === "web_fetch") {
+        sidebar?.onWebFetch(
+          evt.sub_query as string,
+          evt.url as string,
+          (evt.title as string | undefined) ?? "",
+        );
+      } else if (evt.type === "web_fetch_done") {
+        sidebar?.onWebFetchDone(
+          evt.sub_query as string,
+          evt.url as string,
+          (evt.chunks as number) ?? 0,
+        );
+      } else if (evt.type === "executor_done") {
+        sidebar?.onExecutorDone(
+          evt.sub_query as string,
+          evt.target as string,
+          (evt.chunks_count as number) ?? 0,
+        );
+      }
+    };
+
     try {
       const response = await this.api.researchStream(
         {
@@ -282,13 +369,18 @@ export default class AiOsPlugin extends Plugin {
           max_repair_attempts: this.settings.researchMaxRepairAttempts,
           max_sub_queries: options.maxSubQueries,
           decompose: settingToDecompose(this.settings.researchDecompose),
+          memory_write: options.memoryWrite ?? true,
+          source_filter: options.sourceFilter ?? "auto",
+          provider_override: this.buildProviderOverride() ?? undefined,
         },
         onProgress,
+        onEvent,
       );
       onProgress("Writing report…");
       const file = await writeReportNote(this, response, options);
       this.clearResearchStatus();
       notice.hide();
+      sidebar?.onDone();
       new Notice(
         `Report written — ${(response.pass_rate * 100).toFixed(0)}% citations verified` +
           (response.failures.length > 0
@@ -303,9 +395,32 @@ export default class AiOsPlugin extends Plugin {
         e instanceof ApiError
           ? `HTTP ${e.status}: ${e.body.slice(0, 200)}`
           : (e as Error).message;
+      sidebar?.onError(msg);
       new Notice(`Research failed: ${msg}`);
       throw e;
     }
+  }
+
+  // ── Provider override ──────────────────────────────────────────────────────
+
+  buildProviderOverride(): ProviderOverride | null {
+    const { provider, providerApiKey, providerBaseUrl, synthesisModel, judgeModel } = this.settings;
+
+    // For Ollama with no explicit overrides, let the backend use its config.toml defaults.
+    if (provider === "ollama" && !providerBaseUrl && !synthesisModel && !judgeModel) {
+      return null;
+    }
+
+    const meta = PROVIDER_META[provider];
+    const baseUrl = meta.fixedBaseUrl ?? providerBaseUrl ?? meta.defaultBaseUrl ?? "";
+    if (!baseUrl) return null;
+
+    const override: ProviderOverride = { base_url: baseUrl };
+    if (providerApiKey) override.api_key = providerApiKey;
+    if (synthesisModel) override.synthesis_model = synthesisModel;
+    if (judgeModel) override.judge_model = judgeModel;
+
+    return override;
   }
 
   // ── Health probe ───────────────────────────────────────────────────────────
